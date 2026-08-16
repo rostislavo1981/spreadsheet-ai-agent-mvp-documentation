@@ -55,11 +55,34 @@ async def test_fake_failure_maps_retryable():
 
 @pytest.mark.asyncio
 async def test_router_fallback_exhausted():
-    s, p = _settings(failure="authentication")  # non-retryable -> immediate raise
+    s, p = _settings(failure="authentication")  # non-retryable -> no fallback target
     try:
         reg = ProviderRegistry(s)
         router = ModelRouter(reg, s)
-        with pytest.raises(ProviderError):
+        with pytest.raises(ProvidersExhaustedError):
             await router.route(_req(), "auto")
+    finally:
+        import os; os.remove(p)
+
+
+@pytest.mark.asyncio
+async def test_router_falls_back_hermes_to_fake():
+    """When Hermes (first in config) errors, router falls back to fake."""
+    s, p = _settings()  # fake will succeed
+    try:
+        # Build a registry with hermes first (unreachable) then fake.
+        s.enabled_provider_targets = ["hermes", "fake"]
+        s.hermes_enabled = True
+        s.hermes_base_url = "http://127.0.0.1:1/v1"  # closed port -> connection error
+        s.hermes_api_key = "x"
+        from app.providers.implementations.hermes import HermesAdapter
+        reg = ProviderRegistry(s)
+        # inject a hermes adapter (registry skips it without proper env, so add manually)
+        reg._adapters["hermes"] = HermesAdapter(s, base_url="http://127.0.0.1:1/v1", api_key="x")
+        router = ModelRouter(reg, s)
+        resp = await router.route(_req(), "auto")
+        # Must have fallen back to fake and produced a plan.
+        assert resp.provider_id == "fake"
+        assert resp.route_metadata.get("fallback_count", 0) >= 1
     finally:
         import os; os.remove(p)

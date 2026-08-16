@@ -1,58 +1,59 @@
-# Spreadsheet AI Agent — Backend (MVP)
+# Бэкенд ИИ-агента для таблиц (MVP)
 
-Provider-independent AI copilot backend for Google Sheets, built from the
-`spreadsheet-ai-agent-mvp-documentation` spec. Plan → Preview → explicit Apply,
-structured allowlisted actions only, selection-first, formula-preserving,
-snapshot-derived undo, provider-agnostic (OpenAI / OpenRouter / Ollama /
-**Hermes**).
+Независимый от провайдера бэкенд ИИ-копилота для Google Таблиц, собранный по
+спецификации `spreadsheet-ai-agent-mvp-documentation`. План → Превью → явное
+Применение, только структурированные разрешённые действия, контекст по выделению
+(selection-first), сохранение формул, откат по снимку, агностичность к провайдеру
+(OpenAI / OpenRouter / Ollama / **Hermes**).
 
-## Layout
+## Структура
 ```
 app/
-  core/        settings (startup validation), errors (problem+json), ids (limits/hash/sign)
-  domain/      wire models: context, provider contracts, AgentPlan
-  context/     Context Engine: selection-first packing + provider-neutral prompt
-  planning/    Planner: provider call, schema validation, 1 repair, policy check, injection scan
-  policy/      deterministic provider-independent policy validation
-  providers/   ProviderAdapter protocol + fake / openai_compatible / hermes adapters + registry + router
-  tools/       Tool Registry (only vocabulary the planner may use)
-  runs/        Run lifecycle state machine, undo service
-  audit/       sanitized audit store interface
-  persistence/ SQLite repositories (runs + audit) behind the same interface
-  api/         FastAPI routes: /v1/runs:plan, :approve, :result, :prepare-undo, :undo-result, /v1/capabilities, ratelimit
-apps-script/  Google Sheets sidebar client (capture, preview, apply, undo) + ActionExecutor
-tests/         unit / contract (offline, no network or keys) / integration
+  core/        настройки (валидация при старте), ошибки (problem+json), ids (лимиты/hash/sign)
+  domain/      проводные модели: контекст, контракты провайдера, AgentPlan
+  context/     Движок контекста: упаковка по выделению + нейтральный к провайдеру промпт
+  planning/    Планировщик: вызов провайдера, валидация схемы, 1 починка, проверка политик, скан инъекций
+  policy/      детерминированная независимая от провайдера проверка политик
+  providers/   Протокол ProviderAdapter + адаптеры fake / openai_compatible / hermes + реестр + роутер
+  tools/       Реестр инструментов (только словарь, который планировщик может использовать)
+  runs/        Автомат состояний жизненного цикла прогона, сервис отката
+  audit/       интерфейс очищенного хранилища аудита
+  persistence/ SQLite-репозитории (прогоны + аудит) за тем же интерфейсом
+  api/         FastAPI-маршруты: /v1/runs:plan, :approve, :result, :prepare-undo, :undo-result, /v1/capabilities, ratelimit
+apps-script/  Клиент боковой панели Google Таблиц (захват, превью, применение, откат) + ActionExecutor
+tests/         unit / contract (офлайн, без сети и ключей) / integration
 ```
 
-## Quickstart
+## Быстрый старт
 ```bash
 cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[test]"
-cp .env.example .env   # adjust secrets
-# run
+cp .env.example .env   # заполнить секреты
+# запуск
 python -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
-# test (offline, no keys)
+# тесты (офлайн, без ключей)
 python -m pytest tests -q
 ```
 
-## Safety invariants (enforced)
-- Read auto, write only on explicit Apply with a signed, expiring approval token.
-- Only allowlisted P0 actions; model output is untrusted + schema-validated.
-- Selection-first bounded context; formulas preserved; snapshot-derived undo.
-- Prompt-injection scan (fail-closed); rate limit; hard caps on cells/tokens/cost.
-- Provider & Hermes secrets server-side; client never sees them. Raw logging off by default.
+## Инварианты безопасности (реализованы)
+- Чтение автоматическое, запись — только при явном Применении с подписанным токеном одобрения с истечением.
+- Только разрешённые P0-действия; вывод модели недоверенный + валидируется по схеме.
+- Контекст ограничен выделением (selection-first); формулы сохраняются; откат по снимку.
+- Скан на prompt-инъекции (fail-closed); ограничение частоты; жёсткие потолки на ячейки/токены/стоимость.
+- Секреты провайдеров и Hermes — только на сервере; клиент их не видит. Сырое логирование выключено по умолчанию.
 
-## Implemented phases
-- Phase 0: repo skeleton, JSON schemas in runtime, settings validation, CI.
-- Phase 1: read-only vertical slice (fake provider; NO_OP analysis).
-- Phase 2: Plan → Preview → Apply (P0 actions, approval token, client executor).
-- Phase 3: SQLite persistence (survives restart) + audit + snapshot-derived undo.
-- Phase 4: Hermes adapter (Mode A) + routing/fallback parity.
-- Phase 5: pilot hardening — ADD_SHEET, limits, injection defense, redacted logs, rate limit.
+## Реализованные фазы
+- Фаза 0: каркас репозитория, JSON-схемы в рантайме, валидация настроек, CI.
+- Фаза 1: read-only вертикальный срез (fake-провайдер; анализ NO_OP).
+- Фаза 2: План → Превью → Применение (P0-действия, токен одобрения, клиентский executor).
+- Фаза 3: SQLite-персистентность (переживает перезапуск) + аудит + откат по снимку.
+- Фаза 4: адаптер Hermes (Режим A) + паритет маршрутизации/резерва.
+- Фаза 5: закалка пилота — ADD_SHEET, лимиты, защита от инъекций, скрытые логи, rate limit,
+  защита защищённых/объединённых диапазонов, эндпоинты прогона/аудита/метрик.
 
-## Not yet implemented
-Real Google Apps Script deployment wiring, full OpenAI/OpenRouter live calls
-(only offline fake + contract-mocked Hermes tested), browser-based e2e on a live
-sheet, async job queue, multi-tenant auth. These are Phase 5 pilot hardening
-items left for live pilot.
+## Что ещё не реализовано
+Живая развёртка Google Apps Script, полноценные живые вызовы OpenAI/OpenRouter
+(протестированы только offline-fake + Hermes с моком), браузерный e2e на живой
+таблице, очередь асинхронных задач, мультитенантная авторизация. Это пункты
+закалки пилота Фазы 5, оставленные для живого пилота.

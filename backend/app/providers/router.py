@@ -1,9 +1,12 @@
 """Model Router: filter → score → attempt → fallback (PROVIDER_ADAPTERS §7).
 
-Deterministic tie-breaking. No model call to select a model in MVP.
+Configured priority order (`ENABLED_PROVIDER_TARGETS`) is authoritative; score
+is only a future tie-breaker. On any provider failure we attempt the next
+target up to `max_provider_attempts` (fail-closed: non-provider errors propagate).
 """
 from __future__ import annotations
 
+from ..core.errors import ProviderError, ProvidersExhaustedError
 from ..core.settings import Settings, get_settings
 from ..domain.provider_models import ModelRequest, ModelResponse
 from .registry import ProviderRegistry
@@ -18,11 +21,14 @@ _PROFILE_WEIGHTS = {
     "hermes": {"quality": 0.4, "cost": 0.3, "latency": 0.2, "health": 0.1},
 }
 
+# Score only used as a secondary tie-breaker within equal priority.
+_SCORE = {"fake": 0.5, "compatible": 0.7}
+
 
 def _score(provider_id: str, profile: str) -> float:
     w = _PROFILE_WEIGHTS.get(profile, _PROFILE_WEIGHTS["auto"])
-    base = {"fake": 0.5, "compatible": 0.7}.get(provider_id.split("-")[0], 0.6)
-    return round(base * 10 * (w["quality"] + w["cost"] + w["latency"] + w["health"]), 4)
+    base = _SCORE.get(provider_id.split("-")[0], 0.6)
+    return round(base * (w["quality"] + w["cost"] + w["latency"] + w["health"]), 4)
 
 
 class ModelRouter:
@@ -31,19 +37,25 @@ class ModelRouter:
         self.settings = settings or get_settings()
 
     def rank(self, profile: str) -> list[str]:
+        # Configured priority order is authoritative.
         ordered = self.registry.ordered_targets()
-        # Hermes profile => only hermes-eligible targets (openai_compatible hermes id or 'hermes')
         if profile == "hermes":
             ordered = [t for t in ordered if t in ("hermes", self.settings.hermes_profile)]
-        scored = sorted(ordered, key=lambda t: _score(t, profile), reverse=True)
-        return scored
+        # stable secondary sort by score (keeps configured order on ties)
+        return sorted(ordered, key=lambda t: _score(t, profile), reverse=True)
+
+    def rank_keep_order(self, profile: str) -> list[str]:
+        ordered = self.registry.ordered_targets()
+        if profile == "hermes":
+            ordered = [t for t in ordered if t in ("hermes", self.settings.hermes_profile)]
+        return ordered
 
     async def route(self, request: ModelRequest, profile: str | None = None) -> ModelResponse:
         profile = profile or self.settings.default_routing_profile
-        ranked = self.rank(profile)
+        ranked = self.rank_keep_order(profile)
         attempts: list[str] = []
-        last_err = None
-        max_attempts = self.settings.max_provider_attempts
+        last_err: BaseException | None = None
+        max_attempts = min(self.settings.max_provider_attempts, len(ranked)) or 1
         for target in ranked[:max_attempts]:
             attempts.append(target)
             try:
@@ -56,11 +68,14 @@ class ModelRouter:
                     "fallback_count": max(0, len(attempts) - 1),
                 }
                 return resp
-            except Exception as exc:
-                from ..core.errors import ProviderError, ProvidersExhaustedError
-
+            except ProviderError as exc:
+                # Any provider failure falls through to the next target.
                 last_err = exc
-                retryable = isinstance(exc, ProviderError) and exc.retryable
-                if not retryable:
-                    raise
+                continue
+            except Exception as exc:  # noqa: BLE001 - wrap unexpected upstream failures
+                last_err = ProviderError(
+                    f"unexpected provider error from {target}: {exc}",
+                    provider_id=target, retryable=True,
+                )
+                continue
         raise ProvidersExhaustedError(f"all targets failed: {attempts}") from last_err

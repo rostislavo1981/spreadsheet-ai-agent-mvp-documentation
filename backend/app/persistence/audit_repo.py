@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 
 from ..audit.store import AuditEntry, AuditStore
-from ..domain.types import RunStatus
 from ..persistence.db import connection
 
 
@@ -29,7 +28,7 @@ class SqliteAuditStore(AuditStore):
         entry = AuditEntry(
             entry_id=new_id("aud"),
             run_id=run_id, subject_hash=subject_hash, workbook_hash=workbook_hash,
-            status=RunStatus(str(getattr(status, "value", status))),
+            status=str(getattr(status, "value", status)),
             route_provider=route_provider, route_model=route_model,
             plan_hash=plan_hash, warnings=warnings or [],
             affected_cells=affected_cells or 0,
@@ -63,9 +62,10 @@ class SqliteAuditStore(AuditStore):
         out = []
         for r in rows:
             out.append(AuditEntry(
+                entry_id=f"aud_{r['id']}",
                 run_id=r["run_id"], subject_hash=r["subject_hash"], workbook_hash=r["workbook_hash"],
                 status=r["status"], route_provider=r["route_provider"], route_model=r["route_model"],
-                plan_hash=r["plan_hash"], warnings=__import__("json").loads(r["warnings"] or "[]"),
+                plan_hash=r["plan_hash"], warnings=json.loads(r["warnings"] or "[]"),
                 affected_cells=r["affected_cells"], created_at=r["created_at"],
             ))
         return out
