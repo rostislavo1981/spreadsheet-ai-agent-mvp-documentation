@@ -1,0 +1,13 @@
+{
+  "plan": {
+    "schema_version": "1.0",
+    "summary": "Read-only analysis of the selected supplier quotes.",
+    "answer": "The lowest quote per row is the baseline; column I shows deviation from it.",
+    "actions": [],
+    "warnings": [],
+    "assumptions": ["Read-only analysis; no writes performed."],
+    "context_used": ["Quotes!D4:I148"],
+    "requires_confirmation": false
+  },
+  "failure": null
+}

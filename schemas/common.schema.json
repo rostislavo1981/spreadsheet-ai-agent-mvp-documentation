@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spreadsheet-agent.local/schemas/common.schema.json",
+  "title": "Spreadsheet AI Agent common types",
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet_id", "sheet_name", "a1_range"],
+      "properties": {
+        "sheet_id": {"type": "integer"},
+        "sheet_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "a1_range": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "cost_usd": {"type": ["number", "null"], "minimum": 0},
+        "cost_estimated": {"type": "boolean"}
+      }
+    }
+  }
+}
+

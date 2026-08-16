@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spreadsheet-agent.local/schemas/plan-response.schema.json",
+  "title": "Plan response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "status", "assistant_message", "plan", "preview", "route", "usage"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "status": {"enum": ["PREVIEW_READY", "CONTEXT_REQUIRED", "REJECTED"]},
+    "assistant_message": {"type": "string", "maxLength": 20000},
+    "plan": {"anyOf": [{"$ref": "agent-plan.schema.json"}, {"type": "null"}]},
+    "preview": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["plan_hash", "changed_cells", "risk", "expires_at"],
+          "properties": {
+            "plan_hash": {"type": "string", "minLength": 16, "maxLength": 200},
+            "changed_cells": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "risk": {"enum": ["none", "low", "medium", "high"]},
+            "expires_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      ]
+    },
+    "context_requests": {
+      "type": "array", "maxItems": 20,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["sheet_id", "a1_range", "reason"],
+        "properties": {"sheet_id": {"type": "integer"}, "a1_range": {"type": "string", "maxLength": 200}, "reason": {"type": "string", "maxLength": 1000}}
+      }
+    },
+    "route": {
+      "type": "object", "additionalProperties": false, "required": ["provider", "model", "fallback_count"],
+      "properties": {"provider": {"type": ["string", "null"], "maxLength": 100}, "model": {"type": ["string", "null"], "maxLength": 200}, "fallback_count": {"type": "integer", "minimum": 0}}
+    },
+    "usage": {
+      "type": "object", "additionalProperties": false, "required": ["input_tokens", "output_tokens", "cost_usd", "cost_estimated"],
+      "properties": {"input_tokens": {"type": ["integer", "null"], "minimum": 0}, "output_tokens": {"type": ["integer", "null"], "minimum": 0}, "cost_usd": {"type": ["number", "null"], "minimum": 0}, "cost_estimated": {"type": "boolean"}}
+    }
+  }
+}
+

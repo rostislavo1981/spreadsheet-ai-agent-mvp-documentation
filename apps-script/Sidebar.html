@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; font-size: 13px; padding: 10px; }
+    #selchip { background: #eef; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; display: inline-block; }
+    textarea { width: 100%; height: 60px; box-sizing: border-box; }
+    button { margin: 4px 4px 0 0; }
+    .card { border: 1px solid #ccc; border-radius: 4px; padding: 6px; margin-top: 6px; }
+    #response, #preview { white-space: pre-wrap; margin-top: 8px; max-height: 260px; overflow: auto; }
+    .usage { color: #666; font-size: 11px; margin-top: 6px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="selchip">selection: …</div>
+  <label>Context</label>
+  <select id="scope">
+    <option value="selection">Selection</option>
+    <option value="selection_with_neighbors">+ headers/neighbors</option>
+  </select>
+  <label>Profile</label>
+  <select id="profile"><option value="auto">Auto</option></select>
+  <textarea id="prompt" placeholder="Ask or request an edit…"></textarea>
+  <button id="send" onclick="send()">Send</button>
+
+  <div id="preview" class="hidden"></div>
+  <div>
+    <button id="approve" class="hidden" onclick="approve()">Approve</button>
+    <button id="apply" class="hidden" onclick="apply()">Apply</button>
+    <button id="undo" class="hidden" onclick="undo()">Undo</button>
+  </div>
+  <div id="response"></div>
+  <div class="usage" id="usage"></div>
+
+  <script>
+    window._state = { runId: null, planHash: null, token: null, bundle: null };
+
+    function refreshSelection() {
+      google.script.run.withSuccessHandler(function(info) {
+        document.getElementById('selchip').textContent =
+          info.workbook.title + ' · ' + info.selection.a1_range + ' · ' + info.cellCount + ' cells';
+        window._cap = info;
+      }).captureSelection('selection');
+    }
+    function loadCapabilities() {
+      google.script.run.withSuccessHandler(function(cfg) {
+        google.script.run.withSuccessHandler(function(caps) {
+          const sel = document.getElementById('profile');
+          sel.innerHTML = '';
+          (caps.profiles || []).forEach(function(p) {
+            const o = document.createElement('option'); o.value = p.id; o.textContent = p.label; sel.appendChild(o);
+          });
+        }).apiGet('/v1/capabilities');
+      }).getClientConfig();
+    }
+
+    function buildRequest() {
+      return {
+        schema_version: '1.0',
+        client: { type: 'google_sheets', version: '0.1.0', tool_versions: { SET_VALUES: '1.0' } },
+        workbook: window._cap.workbook, selection: window._cap.selection, context: window._cap.context,
+        prompt: document.getElementById('prompt').value.trim(),
+        conversation: [],
+        options: { profile: document.getElementById('profile').value, data_class: 'internal', context_scope: document.getElementById('scope').value },
+      };
+    }
+
+    function send() {
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt || !window._cap) return;
+      document.getElementById('send').disabled = true;
+      google.script.run.withSuccessHandler(function(res) {
+        document.getElementById('send').disabled = false;
+        if (res.ok === false) { document.getElementById('response').textContent = 'Error ' + res.status; return; }
+        const b = res.body;
+        window._state.runId = b.run_id;
+        renderPreview(b);
+      }).apiPost('/v1/runs:plan', buildRequest());
+    }
+
+    function renderPreview(b) {
+      document.getElementById('response').textContent = b.assistant_message || '';
+      const pv = document.getElementById('preview');
+      if (b.status === 'PREVIEW_READY' && b.plan) {
+        window._state.planHash = b.preview.plan_hash;
+        let html = 'Preview: ' + b.preview.changed_cells + ' cells, risk ' + b.preview.risk + '\n';
+        (b.plan.actions || []).forEach(function(a) {
+          html += '\n• ' + a.type + (a.target ? ' @ ' + a.target.a1_range : '') + ' — ' + a.rationale;
+        });
+        pv.textContent = html;
+        pv.classList.remove('hidden');
+        document.getElementById('approve').classList.remove('hidden');
+        document.getElementById('apply').classList.add('hidden');
+      } else {
+        pv.classList.add('hidden');
+      }
+      document.getElementById('usage').textContent =
+        'provider: ' + b.route.provider + ' · tokens: ' + (b.usage.input_tokens||0) + '/' + (b.usage.output_tokens||0);
+    }
+
+    function approve() {
+      document.getElementById('approve').disabled = true;
+      google.script.run.withSuccessHandler(function(res) {
+        document.getElementById('approve').disabled = false;
+        if (res.ok === false) { document.getElementById('response').textContent = 'Approve error ' + res.status; return; }
+        window._state.token = res.body.approval_token;
+        window._state.bundle = res.body.action_bundle;
+        document.getElementById('apply').classList.remove('hidden');
+        document.getElementById('approve').classList.add('hidden');
+      }).apiPost('/v1/runs/' + window._state.runId + ':approve', {
+        plan_hash: window._state.planHash, current_fingerprints: [], confirmation: {},
+      });
+    }
+
+    function apply() {
+      // client re-validates + snapshots + executes locally (ActionExecutor)
+      const res = applyBundle(window._state.bundle, window._state.token);
+      document.getElementById('response').textContent = 'Apply result: ' + res.status;
+      document.getElementById('apply').classList.add('hidden');
+      if (res.status === 'APPLIED') document.getElementById('undo').classList.remove('hidden');
+      // report result to backend
+      google.script.run.withSuccessHandler(function(){}).apiPost('/v1/runs/' + window._state.runId + ':result', {
+        apply_attempt_id: 'apply_' + window._state.runId, approval_token: window._state.token,
+        status: res.status, started_at: new Date().toISOString(), finished_at: new Date().toISOString(),
+        action_results: [], before_snapshot: { encoding: 'cell-matrix-v1', ranges: [] },
+        after_snapshot: { encoding: 'cell-matrix-v1', ranges: [] }, error: res.error || null,
+      });
+    }
+
+    function undo() { document.getElementById('response').textContent = 'Undo: not yet wired (Phase 3).'; }
+
+    refreshSelection(); loadCapabilities();
+  </script>
+</body>
+</html>

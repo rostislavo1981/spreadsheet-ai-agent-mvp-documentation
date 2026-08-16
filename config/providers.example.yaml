@@ -1,0 +1,21 @@
+# Server-side provider/target definitions (PROVIDER_ADAPTERS.md §9).
+# Production should load this validated file / secret manager instead of env only.
+providers:
+  - id: fake
+    kind: fake
+    enabled: true
+    fixture: tests/fixtures/provider/read_only.json
+  - id: compatible
+    kind: openai_compatible
+    enabled: false
+    base_url: http://127.0.0.1:11434/v1
+    api_key_env: OPENAI_COMPATIBLE_API_KEY
+    model: ""
+    profiles: [auto]
+  - id: hermes
+    kind: hermes
+    mode: openai_compatible
+    enabled: false
+    base_url: http://127.0.0.1:8001/v1
+    model: spreadsheet-planner
+    profiles: [hermes, auto]

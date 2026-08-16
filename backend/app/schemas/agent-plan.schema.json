@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spreadsheet-agent.local/schemas/agent-plan.schema.json",
+  "title": "AgentPlan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "summary", "answer", "actions", "warnings", "assumptions", "context_used", "requires_confirmation"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "summary": {"type": "string", "maxLength": 2000},
+    "answer": {"type": "string", "maxLength": 20000},
+    "actions": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/action"}
+    },
+    "warnings": {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 1000}},
+    "assumptions": {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 1000}},
+    "context_used": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 200}},
+    "requires_confirmation": {"type": "boolean"}
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet_id", "sheet_name", "a1_range"],
+      "properties": {
+        "sheet_id": {"type": "integer"},
+        "sheet_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "a1_range": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "action": {
+      "oneOf": [
+        {"$ref": "#/$defs/set_values"},
+        {"$ref": "#/$defs/set_formulas"},
+        {"$ref": "#/$defs/clear_range"},
+        {"$ref": "#/$defs/format_range"},
+        {"$ref": "#/$defs/add_sheet"},
+        {"$ref": "#/$defs/no_op"}
+      ]
+    },
+    "base_action_properties": {
+      "type": "object",
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"},
+        "tool_version": {"const": "1.0"},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "risk": {"enum": ["low", "medium", "high"]},
+        "expected_target_fingerprint": {"type": ["string", "null"], "maxLength": 200}
+      }
+    },
+    "set_values": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "target", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"},
+        "type": {"const": "SET_VALUES"},
+        "tool_version": {"const": "1.0"},
+        "target": {"$ref": "#/$defs/target"},
+        "arguments": {
+          "type": "object", "additionalProperties": false, "required": ["values"],
+          "properties": {"values": {"type": "array", "minItems": 1, "items": {"type": "array"}}, "overwrite_formulas": {"type": "boolean", "default": false}}
+        },
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "risk": {"enum": ["low", "medium", "high"]},
+        "expected_target_fingerprint": {"type": ["string", "null"]}
+      }
+    },
+    "set_formulas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "target", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"}, "type": {"const": "SET_FORMULAS"}, "tool_version": {"const": "1.0"},
+        "target": {"$ref": "#/$defs/target"},
+        "arguments": {"type": "object", "additionalProperties": false, "required": ["formulas", "notation"], "properties": {"formulas": {"type": "array", "minItems": 1, "items": {"type": "array", "items": {"type": "string"}}}, "notation": {"const": "A1"}, "fill_mode": {"const": "exact"}}},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}, "risk": {"enum": ["low", "medium", "high"]}, "expected_target_fingerprint": {"type": ["string", "null"]}
+      }
+    },
+    "clear_range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "target", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"}, "type": {"const": "CLEAR_RANGE"}, "tool_version": {"const": "1.0"}, "target": {"$ref": "#/$defs/target"},
+        "arguments": {"type": "object", "additionalProperties": false, "required": ["contents"], "properties": {"contents": {"const": true}}},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}, "risk": {"enum": ["low", "medium", "high"]}, "expected_target_fingerprint": {"type": ["string", "null"]}
+      }
+    },
+    "format_range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "target", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"}, "type": {"const": "FORMAT_RANGE"}, "tool_version": {"const": "1.0"}, "target": {"$ref": "#/$defs/target"},
+        "arguments": {"type": "object", "additionalProperties": false, "minProperties": 1, "properties": {"background": {"type": "string"}, "font_color": {"type": "string"}, "font_weight": {"enum": ["normal", "bold"]}, "number_format": {"type": "string"}, "horizontal_alignment": {"enum": ["left", "center", "right"]}, "wrap": {"type": "boolean"}}},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}, "risk": {"enum": ["low", "medium", "high"]}, "expected_target_fingerprint": {"type": ["string", "null"]}
+      }
+    },
+    "add_sheet": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"}, "type": {"const": "ADD_SHEET"}, "tool_version": {"const": "1.0"},
+        "arguments": {"type": "object", "additionalProperties": false, "required": ["title"], "properties": {"title": {"type": "string", "minLength": 1, "maxLength": 100}, "rows": {"type": "integer", "minimum": 1, "maximum": 10000}, "columns": {"type": "integer", "minimum": 1, "maximum": 1000}}},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}, "risk": {"enum": ["low", "medium", "high"]}
+      }
+    },
+    "no_op": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action_id", "type", "tool_version", "arguments", "rationale", "risk"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^act_[A-Za-z0-9_-]+$"}, "type": {"const": "NO_OP"}, "tool_version": {"const": "1.0"}, "arguments": {"type": "object", "maxProperties": 0},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}, "risk": {"const": "low"}
+      }
+    }
+  }
+}
+

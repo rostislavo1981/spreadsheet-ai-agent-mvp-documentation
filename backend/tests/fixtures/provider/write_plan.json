@@ -1,0 +1,24 @@
+{
+  "plan": {
+    "schema_version": "1.0",
+    "summary": "Fill a computed deviation column.",
+    "answer": "",
+    "actions": [
+      {
+        "action_id": "act_001",
+        "type": "SET_VALUES",
+        "tool_version": "1.0",
+        "target": {"sheet_id": 12345, "sheet_name": "Quotes", "a1_range": "I5:I7"},
+        "arguments": {"values": [[0.05], [0.12], [0.0]], "overwrite_formulas": false},
+        "rationale": "Deviation vs cheapest quote.",
+        "risk": "medium",
+        "expected_target_fingerprint": null
+      }
+    ],
+    "warnings": [],
+    "assumptions": ["Column I was blank."],
+    "context_used": ["Quotes!I5:I7"],
+    "requires_confirmation": true
+  },
+  "failure": null
+}
