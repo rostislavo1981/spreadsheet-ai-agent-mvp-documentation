@@ -63,9 +63,10 @@ class SqliteAuditStore(AuditStore):
         out = []
         for r in rows:
             out.append(AuditEntry(
+                entry_id=f"aud_{r['id']}",
                 run_id=r["run_id"], subject_hash=r["subject_hash"], workbook_hash=r["workbook_hash"],
-                status=r["status"], route_provider=r["route_provider"], route_model=r["route_model"],
-                plan_hash=r["plan_hash"], warnings=__import__("json").loads(r["warnings"] or "[]"),
+                status=RunStatus(r["status"]), route_provider=r["route_provider"], route_model=r["route_model"],
+                plan_hash=r["plan_hash"], warnings=json.loads(r["warnings"] or "[]"),
                 affected_cells=r["affected_cells"], created_at=r["created_at"],
             ))
         return out

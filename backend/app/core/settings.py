@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # Hermes
     hermes_enabled: bool = False
     hermes_mode: str = "openai_compatible"
-    hermes_base_url: str = "http://127.0.0.1:8001/v1"
+    hermes_base_url: str = "http://127.0.0.1:4012/v1"
     hermes_api_key: str = ""
     hermes_model: str = "spreadsheet-planner"
     hermes_profile: str = "spreadsheet-planner"

@@ -22,7 +22,7 @@ class HermesAdapter(OpenAICompatibleAdapter):
         # Bypass the base __init__ defaults by constructing a compatible settings view.
         self.settings = settings or Settings()
         self.provider_id = "hermes"
-        self.base_url = (overrides.get("base_url") or self.settings.hermes_base_url or "http://127.0.0.1:8001/v1").rstrip("/")
+        self.base_url = (overrides.get("base_url") or self.settings.hermes_base_url or "http://127.0.0.1:4012/v1").rstrip("/")
         self.api_key = overrides.get("api_key", self.settings.hermes_api_key)
         self.model = overrides.get("model", self.settings.hermes_model or "spreadsheet-planner")
         self._profile = overrides.get("profile", self.settings.hermes_profile or "spreadsheet-planner")

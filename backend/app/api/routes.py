@@ -272,3 +272,51 @@ def build_undo_bundle(run, snapshot: dict) -> dict:
         ],
     }
 
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: str, request: Request):
+    """Read-only status view of a run (no raw context/prompt/snapshot)."""
+    svc = request.app.state.services
+    try:
+        run = svc["runs"].get(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {
+        "run_id": run.run_id,
+        "status": run.status.value,
+        "plan_hash": run.plan_hash,
+        "route": {
+            "provider": run.route.get("provider"),
+            "model": run.route.get("model"),
+            "workbook_hash": run.route.get("workbook_hash"),
+        },
+        "usage": run.usage,
+        "preview_expires_at": run.preview_expires_at,
+        "approved_at": run.approved_at,
+        "applied_at": run.applied_at,
+        "action_targets": run.action_targets,
+        "undo_available": svc["undo"].is_available(run.run_id),
+        "created_at": run.created_at,
+    }
+
+
+@router.get("/audit")
+async def list_audit(request: Request, limit: int = 50):
+    """Sanitized audit trail (no prompts/contexts/snapshots)."""
+    svc = request.app.state.services
+    entries = svc["audit"].list(limit=min(limit, 200))
+    return {
+        "entries": [
+            {
+                "run_id": e.run_id,
+                "status": str(e.status),
+                "route_provider": e.route_provider,
+                "route_model": e.route_model,
+                "plan_hash": e.plan_hash,
+                "affected_cells": e.affected_cells,
+                "created_at": e.created_at,
+            }
+            for e in entries
+        ]
+    }
+

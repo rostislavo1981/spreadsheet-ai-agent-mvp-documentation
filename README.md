@@ -44,7 +44,14 @@ A tester can install the Apps Script client in a real Google Sheet, select a ran
 5. Add snapshots, audit, undo, router, and Hermes adapter.
 6. Run the acceptance suite on a copy of a real workbook.
 
-## Local configuration
+## Implementation status
+
+Phases 0–5 are implemented and covered by an offline test suite (32 passed,
+ruff clean). See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the
+per-phase checklist, verification commands, live Hermes fallback spot-check, and
+known out-of-scope gaps (live Apps Script deploy, real provider LLM calls in CI).
+
+Backend entry point: `backend/` (FastAPI). Apps Script client: `apps-script/`.
 
 Copy `.env.example` to `.env`. Never commit `.env`. The MVP needs one enabled provider; Hermes can be the only provider if desired. See [PROVIDER_ADAPTERS.md](PROVIDER_ADAPTERS.md) for precedence and [HERMES_INTEGRATION.md](HERMES_INTEGRATION.md) for modes.
 
