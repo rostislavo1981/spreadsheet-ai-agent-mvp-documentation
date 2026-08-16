@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..core.ids import new_id, utc_now
-from ..domain.types import RunStatus
 
 
 @dataclass
@@ -17,7 +16,7 @@ class AuditEntry:
     run_id: str
     subject_hash: str
     workbook_hash: str
-    status: RunStatus
+    status: str
     route_provider: str | None
     route_model: str | None
     plan_hash: str | None
@@ -26,19 +25,23 @@ class AuditEntry:
     created_at: str = field(default_factory=lambda: utc_now().isoformat())
 
 
+def _status_str(status) -> str:
+    return str(getattr(status, "value", status))
+
+
 class AuditStore:
     def __init__(self) -> None:
         self._entries: list[AuditEntry] = []
 
     def record(self, *, run_id: str, subject_hash: str, workbook_hash: str,
-               status: RunStatus, route_provider: str | None, route_model: str | None,
+               status: object, route_provider: str | None, route_model: str | None,
                plan_hash: str | None, warnings: list[str], affected_cells: int | None) -> AuditEntry:
         entry = AuditEntry(
             entry_id=new_id("aud"),
             run_id=run_id,
             subject_hash=subject_hash,
             workbook_hash=workbook_hash,
-            status=status,
+            status=_status_str(status),
             route_provider=route_provider,
             route_model=route_model,
             plan_hash=plan_hash,

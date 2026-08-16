@@ -50,6 +50,32 @@ def validate_scope(action: Action, allowed: list[str]) -> None:
         )
 
 
+def _ranges_overlap(a: str, b: str) -> bool:
+    try:
+        asr, asc, aer, aec = parse_a1(a)
+        bsr, bsc, ber, bec = parse_a1(b)
+    except ValueError:
+        return False
+    return not (aer < bsr or ber < asr or aec < bsc or bec < asc)
+
+
+def validate_protected_merged(action: Action, protected: list[str], merged: list[str]) -> None:
+    """Reject any write that touches protected or merged cell regions (TOOL_REGISTRY §3)."""
+    if action.target is None or action.type in (ActionType.NO_OP, ActionType.ADD_SHEET):
+        return
+    tgt = action.target.a1_range
+    for p in protected:
+        if _ranges_overlap(tgt, p):
+            raise PolicyViolationError(
+                f"{action.type.value} {action.action_id}: target {tgt} intersects protected range {p}"
+            )
+    for m in merged:
+        if _ranges_overlap(tgt, m):
+            raise PolicyViolationError(
+                f"{action.type.value} {action.action_id}: target {tgt} intersects merged range {m} (cannot partially write)"
+            )
+
+
 def recalc_risk(action: Action) -> str:
     """Never trust model-declared risk; recompute deterministically."""
     return get_tool(action.type.value).default_risk
@@ -64,10 +90,17 @@ def validate_plan(plan, req: PlanRequest, settings: Settings | None = None) -> N
         return
 
     allowed_scope = [req.selection.a1_range]
+    # Collect protected/merged regions across all context ranges (defense in depth).
+    protected: list[str] = []
+    merged: list[str] = []
+    for r in req.context.ranges:
+        protected.extend(getattr(r, "protected_intersections", []) or [])
+        merged.extend(getattr(r, "merged_intersections", []) or [])
     # P0 rejects protected/merged targets; we model that via metadata checks.
     for action in plan.actions:
         get_tool(action.type.value)  # raises on unknown/unsupported
         validate_scope(action, allowed_scope)
+        validate_protected_merged(action, protected, merged)
         validate_action_dimensions(action)
         validate_formula_prefixes(action)
         action.risk = recalc_risk(action)  # overwrite model-declared risk

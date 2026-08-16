@@ -320,3 +320,34 @@ async def list_audit(request: Request, limit: int = 50):
         ]
     }
 
+
+@router.get("/metrics")
+async def get_metrics(request: Request):
+    """Pilot observability (IMPLEMENTATION_PLAN §Pilot observability).
+
+    Sanitized counters only — never cell content, prompts, or fingerprints.
+    """
+    svc = request.app.state.services
+    entries = svc["audit"].list(limit=1000)
+    total = len(entries)
+    by_provider: dict[str, int] = {}
+    applied = 0
+    failed = 0
+    affected = 0
+    for e in entries:
+        by_provider[e.route_provider or "unknown"] = by_provider.get(e.route_provider or "unknown", 0) + 1
+        st = str(e.status)
+        if st == "APPLIED":
+            applied += 1
+        elif st in ("FAILED", "REJECTED"):
+            failed += 1
+        affected += e.affected_cells or 0
+    return {
+        "runs_total": total,
+        "applied": applied,
+        "failed_or_rejected": failed,
+        "affected_cells_total": affected,
+        "by_provider": by_provider,
+        "note": "sanitized; no cell content, prompts, or fingerprints",
+    }
+

@@ -18,8 +18,11 @@ def pack_context(req: PlanRequest) -> dict[str, Any]:
 
     Prioritizes active selection, headers, formulas, types, and a small neighbor
     window. Reports omissions. Never changes action boundaries.
+    Expansion (headers/neighbors) is signaled but bounded by max_context_cells.
     """
     ctx = req.context
+    scope = req.options.context_scope.value
+    expanded = scope in ("selection_with_neighbors", "approved_custom_ranges")
     packed_ranges: list[dict[str, Any]] = []
     for r in ctx.ranges:
         packed_ranges.append({
@@ -39,8 +42,13 @@ def pack_context(req: PlanRequest) -> dict[str, Any]:
             "sheet_name": req.selection.sheet_name,
             "a1_range": req.selection.a1_range,
         },
-        "scope": req.options.context_scope.value,
+        "scope": scope,
+        "expanded": expanded,
     }
+
+
+def is_expanded_scope(req: PlanRequest) -> bool:
+    return req.options.context_scope.value in ("selection_with_neighbors", "approved_custom_ranges")
 
 
 def build_planner_envelope(req: PlanRequest) -> dict[str, Any]:
