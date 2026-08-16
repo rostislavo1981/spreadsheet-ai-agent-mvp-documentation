@@ -56,3 +56,6 @@ uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 Включение Hermes: `HERMES_ENABLED=true`, `HERMES_BASE_URL=http://127.0.0.1:4012/v1`,
 `HERMES_API_KEY=<валидный ключ>`, `ENABLED_PROVIDER_TARGETS=fake,hermes`.
+
+Пилотный прогон и приёмка P0: см. [PILOT_RUNBOOK.md](PILOT_RUNBOOK.md).
+Текущий релиз-кандидат помечен тегом `v0.1.0-pilot`.
