@@ -1,5 +1,6 @@
 // Spreadsheet AI Agent — entry point, menu, sidebar launcher.
-// Phase 1: open assistant; Phase 2/3 add Apply/Undo (see GOOGLE_SHEETS_ADDON.md).
+
+const DEFAULT_BACKEND_URL = 'https://rostislavs-macbook-pro.tailc9f767.ts.net:8022';
 
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
@@ -13,13 +14,18 @@ function onOpen(e) {
 function openAssistant() {
   const html = HtmlService.createHtmlOutputFromFile('Sidebar')
     .setTitle('Spreadsheet AI Assistant')
-    .setWidth(360);
+    .setWidth(380);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function openSettings() {
+  const cfg = getClientConfig();
   const html = HtmlService.createHtmlOutput(
-    '<p>Set backend URL and pilot client token in User Properties (not source).</p>'
+    '<p style="font:13px sans-serif;padding:10px">' +
+    'Backend URL: <code>' + cfg.backendUrl + '</code><br>' +
+    'Client token: ' + (cfg.clientToken ? 'set' : 'empty') + '<br><br>' +
+    'To change, run <code>setBackendUrl("https://...")</code> and ' +
+    '<code>setClientToken("...")</code> from the script editor.</p>'
   ).setTitle('Settings');
   SpreadsheetApp.getUi().showSidebar(html);
 }
@@ -34,7 +40,17 @@ function openAuditHistory() {
 function getClientConfig() {
   const props = PropertiesService.getUserProperties();
   return {
-    backendUrl: props.getProperty('BACKEND_URL') || 'http://127.0.0.1:8000',
+    backendUrl: props.getProperty('BACKEND_URL') || DEFAULT_BACKEND_URL,
     clientToken: props.getProperty('CLIENT_TOKEN') || '',
   };
+}
+
+function setBackendUrl(url) {
+  PropertiesService.getUserProperties().setProperty('BACKEND_URL', url);
+  return 'BACKEND_URL set to ' + url;
+}
+
+function setClientToken(token) {
+  PropertiesService.getUserProperties().setProperty('CLIENT_TOKEN', token);
+  return 'CLIENT_TOKEN updated';
 }

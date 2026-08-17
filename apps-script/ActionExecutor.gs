@@ -84,6 +84,18 @@ function executeAction(a, sheetById) {
       if (args.rows) created.setRowCount(args.rows);
       if (args.columns) created.setColumnCount(args.columns);
       break;
+    case 'RESTORE_RANGE': {
+      // undo: restore prior values/formulas captured by backend
+      const prior = args.prior_values || args.values || [];
+      const priorFormulas = args.prior_formulas || args.formulas || null;
+      const restored = prior.map(function(row, i) {
+        return row.map(function(_, j) {
+          return (priorFormulas && priorFormulas[i][j]) ? priorFormulas[i][j] : prior[i][j];
+        });
+      });
+      range.setValues(restored);
+      break;
+    }
     case 'NO_OP':
       break;
     default:

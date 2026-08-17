@@ -1,68 +1,92 @@
-# Spreadsheet AI Agent MVP
+# MVP «ИИ-агент для таблиц»
 
-Provider-independent AI copilot for Google Sheets with a ChatGPT/Claude-for-Excel-style workflow: ask in a sidebar, inspect a concrete change preview, then explicitly apply or undo it.
+Независимый от провайдера ИИ-копилот для Google Таблиц с рабочим процессом
+в стиле ChatGPT/Claude для Excel: запрос в боковой панели → просмотр конкретного
+превью изменений → явное Применение или Откат.
 
-This repository is an implementation-ready specification. Google Sheets is the first client; the backend contracts deliberately separate spreadsheet access, model providers, context assembly, planning, policy, and execution so Excel, MCP, files, databases, and Hermes tools can be added later.
+Этот репозиторий — готовая к реализации спецификация. Google Таблицы — первый
+клиент; бэкенд-контракты намеренно разделены: доступ к таблицам, провайдеры
+моделей, сбор контекста, планирование, политика, исполнение — чтобы позже
+добавить Excel, MCP, файлы, базы данных и инструменты Hermes.
 
-## MVP outcome
+## Результат MVP
 
-A tester can install the Apps Script client in a real Google Sheet, select a range, ask a question or request an edit, preview structured changes, apply them, and undo the last applied run. Existing formulas outside explicitly targeted cells are never overwritten.
+Тестировщик может установить клиент Apps Script в реальную Google Таблицу,
+выделить диапазон, задать вопрос или запросить правку, увидеть структурированное
+превью, применить изменения и откатить последний применённый прогон.
+Существующие формулы вне явно целевых ячеек никогда не перезаписываются.
 
-## Product invariants
+## Продуктовые инварианты
 
-1. **Selection first.** The selected range is the default context and initial action boundary; any expansion is explicit, bounded, and fingerprinted.
-2. **Read is automatic; writes are explicit.** No write occurs before Preview and Apply.
-3. **Structured actions only.** Model prose is never evaluated as code or sent directly to Sheets.
-4. **Formula preservation.** Context carries values and formulas separately; untouched formulas remain untouched.
-5. **Provider independence.** OpenAI, Anthropic, OpenRouter, Ollama, compatible endpoints, and Hermes implement one adapter contract.
-6. **Optimistic safety.** Apply fails if the relevant sheet fingerprint changed after planning.
-7. **Auditable and reversible.** Applied actions record before/after state and produce an undo bundle.
-8. **Bounded cost.** Context, turns, output, provider choices, and spend have hard limits.
+1. **Selection first.** Выделение — базовый контекст и граница действий; любое
+   расширение явное, ограниченное и фирнгерпринченное.
+2. **Чтение авто; запись — явная.** Никакой записи до Превью и Применения.
+3. **Только структурированные действия.** Текст модели никогда не исполняется
+   как код и не отправляется в Таблицы напрямую.
+4. **Сохранение формул.** Контекст несет значения и формулы раздельно; не тронутые
+   формулы остаются нетронутыми.
+5. **Независимость от провайдера.** OpenAI, Anthropic, OpenRouter, Ollama,
+   совместимые эндпоинты и Hermes реализуют один контракт адаптера.
+5. **Оптимистичная безопасность.** Apply падает, если фирнгерпринт листа
+   изменился после планирования.
+6. **Аудит и обратимость.** Применённые действия записывают состояние до/после
+   и генерируют бандл отката.
+7. **Ограниченная стоимость.** Контекст, ходы, вывод, выбор провайдера и расходы
+   имеют жёсткие потолки.
 
-## Start here
+## Начните здесь
 
-- Product definition: [PRD.md](PRD.md)
-- MVP boundaries: [MVP_SCOPE.md](MVP_SCOPE.md)
-- Architecture and decisions: [ARCHITECTURE.md](ARCHITECTURE.md)
-- Repository layout: [REPO_STRUCTURE.md](REPO_STRUCTURE.md)
-- Build sequence: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
-- Backend/API contracts: [API_CONTRACTS.md](API_CONTRACTS.md)
-- Provider and Hermes integration: [PROVIDER_ADAPTERS.md](PROVIDER_ADAPTERS.md), [HERMES_INTEGRATION.md](HERMES_INTEGRATION.md)
-- Apps Script client: [GOOGLE_SHEETS_ADDON.md](GOOGLE_SHEETS_ADDON.md)
-- Actions and tools: [TOOL_REGISTRY.md](TOOL_REGISTRY.md)
-- Provider-neutral planner prompt: [PLANNER_PROMPT.md](PLANNER_PROMPT.md)
-- Safety, tests, acceptance: [SECURITY_GUARDRAILS.md](SECURITY_GUARDRAILS.md), [TEST_PLAN.md](TEST_PLAN.md), [ACCEPTANCE_CRITERIA.md](ACCEPTANCE_CRITERIA.md)
-- Agent handoff: [AGENT_IMPLEMENTATION_PROMPT.md](AGENT_IMPLEMENTATION_PROMPT.md)
-- Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md)
+- Продуктовое определение: [PRD.md](PRD.md)
+- Границы MVP: [MVP_SCOPE.md](MVP_SCOPE.md)
+- Архитектура и решения: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Структура репозитория: [REPO_STRUCTURE.md](REPO_STRUCTURE.md)
+- План реализации: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+- Бэкенд/API контракты: [API_CONTRACTS.md](API_CONTRACTS.md)
+- Провайдеры и интеграция Hermes: [PROVIDER_ADAPTERS.md](PROVIDER_ADAPTERS.md), [HERMES_INTEGRATION.md](HERMES_INTEGRATION.md)
+- Клиент Apps Script: [GOOGLE_SHEETS_ADDON.md](GOOGLE_SHEETS_ADDON.md)
+- Действия и инструменты: [TOOL_REGISTRY.md](TOOL_REGISTRY.md)
+- Промпт планировщика (provider-neutral): [PLANNER_PROMPT.md](PLANNER_PROMPT.md)
+- Безопасность, тесты, приёмка: [SECURITY_GUARDRAILS.md](SECURITY_GUARDRAILS.md), [TEST_PLAN.md](TEST_PLAN.md), [ACCEPTANCE_CRITERIA.md](ACCEPTANCE_CRITERIA.md)
+- Промпт для агента-реализатора: [AGENT_IMPLEMENTATION_PROMPT.md](AGENT_IMPLEMENTATION_PROMPT.md)
+- Переменные окружения: [ENVIRONMENT.md](ENVIRONMENT.md)
 
-## Fastest implementation path
+## Самый быстрый путь реализации
 
-1. Scaffold the repository exactly as described in `REPO_STRUCTURE.md`.
-2. Implement Pydantic models from `schemas/*.json` and API endpoints from `API_CONTRACTS.md`.
-3. Implement one OpenAI-compatible provider plus deterministic fake provider.
-4. Build selection capture, sidebar chat, preview cards, local apply, and result reporting.
-5. Add snapshots, audit, undo, router, and Hermes adapter.
-6. Run the acceptance suite on a copy of a real workbook.
+1. Создайте репозиторий точно по `REPO_STRUCTURE.md`.
+2. Реализуйте Pydantic-модели из `schemas/*.json` и API-эндпоинты из `API_CONTRACTS.md`.
+3. Реализуйте один OpenAI-совместимый провайдер + детерминированный fake-провайдер.
+4. Постройте захват выделения, чат в сайдбаре, карточки превью, локальное Apply, отчёт результата.
+5. Добавьте снимки, аудит, откат, роутер и адаптер Hermes.
+6. Прогоните приёмочный набор на копии реальной книги.
 
 ## Статус реализации
 
-Фазы 0–5 реализованы и покрыты офлайн-набором тестов (35 passed, ruff clean).
+Фазы 0–5 реализованы и покрыты офлайн-набором тестов (37 passed, ruff clean).
 См. [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) — чек-лист по фазам,
 команды проверки, контрольный прогон живого резерва Hermes и известные пробелы
 вне scope (живой деплой Apps Script, реальные вызовы LLM в CI).
 
+**Клиент Google Таблиц (Apps Script) полностью переписан под формат «Claude для Excel»:**
+- Чат-UI с историей, Markdown, выбором профиля/модели, превью плана, кнопками Approve/Apply/Undo
+- Реальное применение (SET_VALUES/SET_FORMULAS/CLEAR_RANGE/FORMAT_RANGE/ADD_SHEET) + откат
+- Деплой через `clasp push` выполнен
+
 Бэкенд: `backend/` (FastAPI). Клиент Apps Script: `apps-script/`.
 
-Copy `.env.example` to `.env`. Never commit `.env`. The MVP needs one enabled provider; Hermes can be the only provider if desired. See [PROVIDER_ADAPTERS.md](PROVIDER_ADAPTERS.md) for precedence and [HERMES_INTEGRATION.md](HERMES_INTEGRATION.md) for modes.
+Скопируйте `.env.example` в `.env`. Никогда не коммитьте `.env`. MVP требует один
+включённый провайдер; Hermes может быть единственным. См. [PROVIDER_ADAPTERS.md](PROVIDER_ADAPTERS.md) для приоритетов и [HERMES_INTEGRATION.md](HERMES_INTEGRATION.md) для режимов.
 
-## Recommended MVP stack
+## Рекомендуемый стек MVP
 
 - Python 3.12, FastAPI, Pydantic v2, httpx
-- SQLite + SQLAlchemy/Alembic for runs and audit
+- SQLite + SQLAlchemy/Alembic для прогонов и аудита
 - pytest, respx, Ruff, mypy
-- Google Apps Script, HTML/CSS/vanilla TypeScript or JavaScript
-- JSON Schema Draft 2020-12 for cross-client contracts
+- Google Apps Script, HTML/CSS/vanilla JavaScript
+- JSON Schema Draft 2020-12 для кросс-клиентских контрактов
 
-## Definition of done
+## Definition of Done
 
-The MVP is done only when every item in `ACCEPTANCE_CRITERIA.md` marked **P0** passes, including stale-preview rejection, formula preservation, undo, provider fallback, Hermes contract tests, and token/cost enforcement.
+MVP считается готовым только когда каждый пункт в `ACCEPTANCE_CRITERIA.md`,
+помеченный **P0**, пройден — включая отказ по устаревшему превью, сохранение
+формул, откат, фолбэк провайдера, тесты контракта Hermes и принуждение
+лимитов токенов/стоимости.
