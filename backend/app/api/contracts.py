@@ -85,8 +85,8 @@ def verify_approval_token(token: str, run_id: str, plan_hash: str, workbook_hash
 
 class PrepareUndoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    approval_token: str
-    snapshot: dict[str, Any] = Field(default_factory=dict)
+    before_snapshot: dict[str, Any]  # client-held snapshot taken BEFORE apply
+    approval_token: str | None = None  # ignored on prepare; issued by server in response
 
 
 class UndoResultRequest(BaseModel):
