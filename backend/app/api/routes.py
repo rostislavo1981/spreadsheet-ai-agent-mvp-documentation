@@ -214,20 +214,20 @@ async def prepare_undo(run_id: str, request: Request):
 
     body = await request.body()
     ureq = PrepareUndoRequest.model_validate_json(body)
-    if not verify_approval_token(
-        ureq.approval_token, run.run_id, run.plan_hash or "",
-        run.route.get("workbook_hash", ""), run.action_targets, settings.app_signing_secret,
-    ):
-        raise HTTPException(status_code=401, detail="invalid or expired approval token")
-
     if not svc["undo"].is_available(run.run_id):
         raise HTTPException(status_code=409, detail="undo not available")
 
     # Build a snapshot-derived undo bundle (no model involvement).
-    bundle = build_undo_bundle(run, ureq.snapshot)
+    bundle = build_undo_bundle(run, ureq.before_snapshot)
+    # Issue a signed, expiring approval token for the undo apply step.
+    undo_token, _ = build_approval_token(
+        run.run_id, run.plan_hash or "", run.route.get("workbook_hash", ""),
+        run.action_targets, settings.app_signing_secret, settings.approval_ttl_seconds,
+    )
     return {
         "run_id": run.run_id,
         "undo_attempt_id": f"undo_{run.run_id}",
+        "approval_token": undo_token,
         "undo_bundle": bundle,
         "approver_count_required": 1,
     }

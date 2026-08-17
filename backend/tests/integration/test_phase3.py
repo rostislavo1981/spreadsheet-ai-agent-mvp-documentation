@@ -92,16 +92,18 @@ def test_undo_flow(client):
         ]},
     })
     assert res.status_code == 200
-    # prepare-undo derives a bundle from the snapshot
+    # prepare-undo derives a bundle from the BEFORE snapshot (server issues its own token)
     pu = client.post(f"/v1/runs/{run_id}:prepare-undo", json={
-        "approval_token": token,
-        "snapshot": {"ranges": [{"sheet_id": 12345, "a1_range": "I5:I7", "values": [[0.0], [0.0], [0.0]]}]},
+        "before_snapshot": {"ref": "snap_0", "ranges": [
+            {"sheet_id": 12345, "sheet_name": "Quotes", "a1_range": "I5:I7", "values": [[0.0], [0.0], [0.0]]}
+        ]},
     })
     assert pu.status_code == 200, pu.text
     assert pu.json()["undo_bundle"]["actions"][0]["type"] == "RESTORE_RANGE"
-    # undo-result
+    undo_token = pu.json()["approval_token"]
+    # undo-result with the server-issued undo token
     ur = client.post(f"/v1/runs/{run_id}:undo-result", json={
-        "undo_attempt_id": "undo_" + run_id, "approval_token": token, "status": "RESTORED",
+        "undo_attempt_id": "undo_" + run_id, "approval_token": undo_token, "status": "RESTORED",
     })
     assert ur.status_code == 200
     assert ur.json()["status"] == "UNDONE"
@@ -113,5 +115,5 @@ def test_undo_without_apply_fails(client):
     phash = r.json()["preview"]["plan_hash"]
     a = client.post(f"/v1/runs/{run_id}:approve", json={"plan_hash": phash, "current_fingerprints": [], "confirmation": {}})
     token = a.json()["approval_token"]
-    pu = client.post(f"/v1/runs/{run_id}:prepare-undo", json={"approval_token": token, "snapshot": {"ranges": []}})
+    pu = client.post(f"/v1/runs/{run_id}:prepare-undo", json={"before_snapshot": {"ranges": []}})
     assert pu.status_code == 409  # undo not available (never applied)
