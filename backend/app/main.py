@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api import capabilities, routes
 from .core.errors import SpreadsheetAgentError
@@ -82,5 +84,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health/ready")
     async def health_ready():
         return {"status": "ok", "providers": registry.targets()}
+
+    # Public static assets (e.g. add-on logo) — mounted under /static and /logo.png.
+    _static_dir = Path(__file__).resolve().parent / "static"
+    _static_dir.mkdir(exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+    if (_static_dir / "logo.png").exists():
+        from fastapi.responses import FileResponse
+
+        @app.get("/logo.png")
+        async def logo_png():
+            return FileResponse(str(_static_dir / "logo.png"), media_type="image/png")
 
     return app

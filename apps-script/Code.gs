@@ -3,12 +3,51 @@
 const DEFAULT_BACKEND_URL = 'https://sheets.projectrost.ru';
 
 function onOpen(e) {
+  // For Marketplace add-ons Google injects the add-on menu automatically;
+  // we still ensure the assistant entries exist (works both as add-on and bound script).
   const ui = SpreadsheetApp.getUi();
   const menu = ui.createMenu('Spreadsheet AI');
   menu.addItem('Open assistant', 'openAssistant');
   menu.addItem('Settings', 'openSettings');
   menu.addItem('Audit history', 'openAuditHistory');
   menu.addToUi();
+}
+
+// Triggered by add-on install: adds the menu once the add-on is installed.
+function onAddOnOpen() {
+  const ui = SpreadsheetApp.getUi();
+  const menu = ui.createAddonMenu();
+  menu.addItem('Open assistant', 'openAssistant');
+  menu.addItem('Settings', 'openSettings');
+  menu.addItem('Audit history', 'openAuditHistory');
+  menu.addToUi();
+}
+
+// Re-adds the menu after the user grants the spreadsheet file scope
+// (only for add-ons; bound scripts rely on onOpen).
+function onFileScopeGranted() {
+  onAddOnOpen();
+}
+
+// Homepage card (addOns.common.homepageTrigger): what the user sees when
+// opening the add-on from the Workspace Marketplace / add-ons manager.
+function onHomepage(e) {
+  const card = CardService.newCardBuilder()
+    .setHeader(CardService.newCardHeader().setTitle('Spreadsheet AI Agent'))
+    .addSection(CardService.newCardSection()
+      .addWidget(CardService.newTextParagraph().setText(
+        'ИИ-ассистент для Google Таблиц: выделите диапазон, задайте вопрос — ' +
+        'получите план изменений и примените его одной кнопкой.'
+      ))
+      .addWidget(CardService.newButtonSet().addButton(
+        CardService.newTextButton()
+          .setText('Open assistant')
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+          .setBackgroundColor('#2563eb')
+          .setOnClickAction(CardService.newAction().setFunctionName('openAssistant'))
+      )))
+    .build();
+  return card;
 }
 
 function openAssistant() {

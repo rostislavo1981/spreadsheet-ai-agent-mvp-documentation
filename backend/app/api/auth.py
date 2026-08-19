@@ -35,7 +35,8 @@ class ClientAuthMiddleware(BaseHTTPMiddleware):
         return any(hmac.compare_digest(presented_hash, known) for known in self.token_hashes)
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in ("/health/live", "/health/ready"):
+        path = request.url.path
+        if path in ("/health/live", "/health/ready", "/logo.png") or path.startswith("/static/"):
             return await call_next(request)
         if not self._authenticated(request):
             return JSONResponse(

@@ -1,7 +1,35 @@
 {
   "timeZone": "America/New_York",
-  "dependencies": {
-  },
+  "dependencies": {},
   "exceptionLogging": "STACKDRIVER",
-  "runtimeVersion": "V8"
+  "runtimeVersion": "V8",
+  "addOns": {
+    "common": {
+      "name": "Spreadsheet AI Agent",
+      "logoUrl": "https://sheets.projectrost.ru/logo.png",
+      "homepageTrigger": {
+        "runFunction": "onHomepage"
+      },
+      "useLocaleFromApp": true,
+      "layoutProperties": {
+        "primaryColor": "#2563eb",
+        "secondaryColor": "#1d4ed8"
+      }
+    },
+    "sheets": {
+      "homepageTrigger": {
+        "runFunction": "onAddOnOpen"
+      },
+      "onFileScopeGrantedTrigger": {
+        "runFunction": "onFileScopeGranted"
+      }
+    }
+  },
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets.currentonly",
+    "https://www.googleapis.com/auth/userinfo.email"
+  ],
+  "urlFetchWhitelist": [
+    "https://sheets.projectrost.ru/*"
+  ]
 }
