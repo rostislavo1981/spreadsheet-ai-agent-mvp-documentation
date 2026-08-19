@@ -12,7 +12,7 @@ from ..tools.registry import P0_TOOL_VERSIONS
 router = APIRouter(prefix="/v1", tags=["capabilities"])
 
 
-def build_capabilities(settings: Settings | None = None) -> dict:
+def build_capabilities(settings: Settings | None = None, hermes_models: list[dict] | None = None) -> dict:
     settings = settings or get_settings()
     tools = [{"type": t, "version": v} for t, v in P0_TOOL_VERSIONS.items()]
     profiles = [
@@ -24,6 +24,7 @@ def build_capabilities(settings: Settings | None = None) -> dict:
         "action_schema_versions": ["1.0"],
         "profiles": profiles,
         "tools": tools,
+        "hermes_models": hermes_models or [],
         "limits": {
             "max_selected_cells": settings.max_selected_cells,
             "max_actions": settings.max_actions,
@@ -36,4 +37,11 @@ def build_capabilities(settings: Settings | None = None) -> dict:
 @router.get("/capabilities")
 async def get_capabilities(request: Request):
     svc = request.app.state.services
-    return build_capabilities(svc["settings"])
+    settings = svc["settings"]
+    hermes_models: list[dict] = []
+    if settings.hermes_enabled:
+        registry = svc["registry"]
+        adapter = registry.get("hermes")
+        models = await adapter.list_models()
+        hermes_models = [{"id": m.id} for m in models]
+    return build_capabilities(settings, hermes_models)

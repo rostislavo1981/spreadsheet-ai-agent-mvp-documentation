@@ -66,7 +66,7 @@ class Omission(BaseModel):
 
 class ContextPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    ranges: list[RangeContext] = Field(min_items=1, max_items=100)
+    ranges: list[RangeContext] = Field(min_length=1, max_length=100)
     omissions: list[Omission] = Field(default_factory=list)
 
 
@@ -97,6 +97,8 @@ class PlanOptions(BaseModel):
     data_class: DataClass
     max_cost_usd: float | None = Field(default=None, ge=0)
     context_scope: ContextScope
+    model: str | None = Field(default=None, max_length=200)
+    client_run_token: str | None = Field(default=None, max_length=100)
 
 
 class PlanRequest(BaseModel):
@@ -109,7 +111,7 @@ class PlanRequest(BaseModel):
     selection: Target
     context: ContextPayload
     prompt: str = Field(min_length=1, max_length=20000)
-    conversation: list[ConversationTurn] = Field(default_factory=list, max_items=12)
+    conversation: list[ConversationTurn] = Field(default_factory=list, max_length=12)
     options: PlanOptions
 
     def model_post_init(self, _ctx: Any) -> None:

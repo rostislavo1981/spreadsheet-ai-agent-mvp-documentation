@@ -5,7 +5,7 @@ from ..core.errors import PolicyViolationError
 from ..core.ids import parse_a1, rect_dimensions
 from ..core.settings import Settings, get_settings
 from ..domain.models import PlanRequest
-from ..domain.provider_models import Action, ActionType
+from ..domain.provider_models import Action, ActionType, Risk
 from ..tools.registry import get_tool, plan_changed_cells
 
 
@@ -76,9 +76,9 @@ def validate_protected_merged(action: Action, protected: list[str], merged: list
             )
 
 
-def recalc_risk(action: Action) -> str:
+def recalc_risk(action: Action) -> Risk:
     """Never trust model-declared risk; recompute deterministically."""
-    return get_tool(action.type.value).default_risk
+    return Risk(get_tool(action.type.value).default_risk)
 
 
 def validate_plan(plan, req: PlanRequest, settings: Settings | None = None) -> None:

@@ -1,6 +1,6 @@
 // Spreadsheet AI Agent — entry point, menu, sidebar launcher.
 
-const DEFAULT_BACKEND_URL = 'https://rostislavs-macbook-pro.tailc9f767.ts.net:8022';
+const DEFAULT_BACKEND_URL = 'https://sheets.projectrost.ru';
 
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();

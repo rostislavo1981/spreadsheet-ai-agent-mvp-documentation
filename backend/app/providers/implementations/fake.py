@@ -6,6 +6,7 @@ via fixture for contract tests. Implements `planner_only` — no side-effect too
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +65,9 @@ class FakeProviderAdapter(ProviderAdapter):
     def estimate_cost(self, request: ModelRequest) -> CostEstimate:
         return CostEstimate(estimated_cost_usd=0.0)
 
-    async def complete(self, request: ModelRequest) -> ModelResponse:
+    async def complete(
+        self, request: ModelRequest, *, on_delta: Callable[[str], None] | None = None,
+    ) -> ModelResponse:
         failure = self._fixture.get("failure")
         if failure:
             from ...core.errors import ProviderError
@@ -76,6 +79,8 @@ class FakeProviderAdapter(ProviderAdapter):
             )
         plan = self._fixture.get("plan", {})
         content = json.dumps(plan, ensure_ascii=False)
+        if on_delta is not None:
+            on_delta(content)
         return ModelResponse(
             provider_id=self.provider_id,
             model="fake-planner",

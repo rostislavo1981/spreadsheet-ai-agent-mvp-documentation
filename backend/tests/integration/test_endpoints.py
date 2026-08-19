@@ -1,7 +1,6 @@
 """Endpoint coverage for run status + sanitized audit (Phase 3/5 additions)."""
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -23,8 +22,8 @@ def make_settings(fixture: str, db_path: str) -> Settings:
 
 @pytest.fixture
 def tmpdb():
-    fd = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
-    p = fd.name; fd.close()
+    with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as fd:
+        p = fd.name
     yield p
     Path(p).unlink(missing_ok=True)
 

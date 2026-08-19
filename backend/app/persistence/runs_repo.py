@@ -18,6 +18,7 @@ class SqliteRunStore(RunStore):
     """
 
     def __init__(self, db_path: str | None = None) -> None:
+        super().__init__()
         self._db_path = db_path
         self._plan_cache: dict[str, AgentPlan] = {}
 

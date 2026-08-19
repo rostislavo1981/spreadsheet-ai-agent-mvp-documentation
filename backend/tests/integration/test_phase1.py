@@ -53,6 +53,35 @@ def test_capabilities(client):
     assert "key" not in json.dumps(body).lower()
 
 
+def test_capabilities_hermes_models_empty_when_disabled(client):
+    r = client.get("/v1/capabilities")
+    assert r.status_code == 200
+    assert r.json()["hermes_models"] == []
+
+
+def test_capabilities_hermes_models_populated_when_enabled():
+    import httpx
+    import respx
+
+    reset_settings()
+    s = Settings(
+        app_env="development", app_signing_secret="test-secret-0000000000",
+        app_id_hash_salt="test-salt-000000000000", enabled_provider_targets="hermes",
+        hermes_enabled=True, hermes_base_url="http://127.0.0.1:57377/v1",
+        hermes_api_key="t", hermes_model="spreadsheet-planner", fake_provider_enabled=False,
+    )
+    app = create_app(s)
+    client = TestClient(app)
+    with respx.mock:
+        respx.get("http://127.0.0.1:57377/v1/models").mock(
+            return_value=httpx.Response(200, json={"data": [{"id": "hermes-4-70b"}, {"id": "hermes-4-mini"}]})
+        )
+        r = client.get("/v1/capabilities")
+    assert r.status_code == 200
+    ids = [m["id"] for m in r.json()["hermes_models"]]
+    assert ids == ["hermes-4-70b", "hermes-4-mini"]
+
+
 def _sample_plan_request() -> dict:
     return {
         "schema_version": "1.0",
@@ -88,8 +117,51 @@ def test_create_plan_readonly(client):
     assert body["run_id"]
 
 
+def test_stream_status_resolves_client_run_token(client):
+    req = _sample_plan_request()
+    req["options"]["client_run_token"] = "sidebar-token-123"
+    r = client.post("/v1/runs:plan", json=req)
+    assert r.status_code == 200, r.text
+    run_id = r.json()["run_id"]
+
+    s = client.get("/v1/runs/by-token/sidebar-token-123:stream-status")
+    assert s.status_code == 200, s.text
+    body = s.json()
+    assert body["run_id"] == run_id
+    assert body["status"] == "PREVIEW_READY"
+    assert "partial_text" in body
+
+
+def test_stream_status_unknown_token_404(client):
+    s = client.get("/v1/runs/by-token/does-not-exist:stream-status")
+    assert s.status_code == 404
+
+
+def test_plan_endpoint_returns_422_not_500_for_schema_invalid_provider_output():
+    """A provider (even after the one repair attempt) returning valid JSON
+    that doesn't match the AgentPlan schema must produce a clean 422
+    SCHEMA-VALIDATION problem response, not an unhandled 500 -- this is the
+    realistic failure mode for weaker/free real models that don't reliably
+    follow response_format instructions."""
+    import tempfile
+
+    fix = {"plan": {"not_a_valid_plan": True}, "failure": None}
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as fd:
+        json.dump(fix, fd)
+    reset_settings()
+    s = Settings(
+        app_env="development", app_signing_secret="test-secret-0000000000",
+        app_id_hash_salt="test-salt-000000000000", enabled_provider_targets="fake",
+        fake_provider_enabled=True, fake_provider_fixture=fd.name,
+        openai_compatible_enabled=False, hermes_enabled=False,
+    )
+    c = TestClient(create_app(s))
+    r = c.post("/v1/runs:plan", json=_sample_plan_request())
+    assert r.status_code == 422, r.text
+    assert r.json()["code"] == "INVALID_PLAN"
+
+
 def test_plan_request_too_large(client):
-    big = _sample_plan_request()
     # inflate prompt beyond limit indirectly via many conversation turns not allowed;
     # instead exceed max_request_bytes is covered by settings; here just confirm validation.
     r = client.post("/v1/runs:plan", json={})  # missing required fields

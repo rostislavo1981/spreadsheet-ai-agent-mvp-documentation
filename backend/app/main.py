@@ -22,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     registry = ProviderRegistry(settings)
     router = ModelRouter(registry, settings)
 
+    from .api.auth import ClientAuthMiddleware
     from .api.ratelimit import RateLimitMiddleware
     from .audit.store import AuditStore
     from .persistence.audit_repo import SqliteAuditStore
@@ -48,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes.router)
     app.include_router(capabilities.router)
     app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute, burst=settings.rate_limit_burst)
+    app.add_middleware(ClientAuthMiddleware, token_hashes_csv=settings.app_client_token_hashes)
 
     @app.exception_handler(SpreadsheetAgentError)
     async def handle_domain_error(request, exc: SpreadsheetAgentError):

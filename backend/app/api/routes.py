@@ -77,11 +77,24 @@ async def create_plan(request: Request):
 
     req = PlanRequest.model_validate_json(body)
     run = svc["runs"].create(parent_run_id=req.parent_run_id)
+    if req.options.client_run_token:
+        svc["runs"].register_token(req.options.client_run_token, run.run_id)
     run.transition(RunStatus.PLANNING)
 
     planner = Planner(svc["router"], settings)
+    on_delta = None
+    on_attempt_start = None
+    if req.options.client_run_token:
+        run_id = run.run_id
+        runs_store = svc["runs"]
+
+        def on_delta(delta: str) -> None:
+            runs_store.append_stream_text(run_id, delta)
+
+        def on_attempt_start() -> None:
+            runs_store.clear_stream_text(run_id)
     try:
-        plan, route = await planner.plan(req)
+        plan, route = await planner.plan(req, on_delta=on_delta, on_attempt_start=on_attempt_start)
     except ContextRequiredError:
         run.transition(RunStatus.REJECTED)
         return _build_response(req, None, {"provider": None, "model": None, "fallback_count": 0},
@@ -297,6 +310,25 @@ async def get_run(run_id: str, request: Request):
         "action_targets": run.action_targets,
         "undo_available": svc["undo"].is_available(run.run_id),
         "created_at": run.created_at,
+    }
+
+
+@router.get("/runs/by-token/{client_run_token}:stream-status")
+async def stream_status(client_run_token: str, request: Request):
+    """Pseudo-streaming status: lets a client that generated a run token before
+    the :plan call returned poll for partial assistant text while it is still
+    in flight (Apps Script's UrlFetchApp blocks the caller of :plan itself, so
+    this must be reachable from a second, independent request)."""
+    svc = request.app.state.services
+    try:
+        run_id = svc["runs"].resolve_token(client_run_token)
+        run = svc["runs"].get(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown client_run_token")
+    return {
+        "run_id": run.run_id,
+        "status": run.status.value,
+        "partial_text": svc["runs"].get_stream_text(run.run_id),
     }
 
 

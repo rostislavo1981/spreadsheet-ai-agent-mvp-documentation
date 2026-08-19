@@ -4,8 +4,6 @@ Offline; uses write_plan fixture (deterministic SET_VALUES).
 """
 from __future__ import annotations
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -29,7 +27,6 @@ def make_settings(fixture: str) -> Settings:
 @pytest.fixture
 def client():
     reset_settings()
-    import os
     from pathlib import Path
     fx = str(Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "provider" / "write_plan.json")
     app = create_app(make_settings(fx))

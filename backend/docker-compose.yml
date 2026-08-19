@@ -1,0 +1,19 @@
+services:
+  spreadsheet-agent:
+    build: .
+    container_name: spreadsheet-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - mdr
+    volumes:
+      - spreadsheet_agent_data:/app/data
+
+networks:
+  mdr:
+    external: true
+
+volumes:
+  spreadsheet_agent_data:
+    name: spreadsheet-agent-data

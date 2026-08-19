@@ -6,6 +6,7 @@ NO_OP answers (Phase 1 vertical slice) and structured plan previews (Phase 2+).
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 import jsonschema
@@ -36,13 +37,22 @@ def _extract_json(content: str) -> dict[str, Any]:
     end = content.rfind("}")
     if start == -1 or end == -1:
         raise SchemaValidationError("no JSON object found in provider content")
-    return json.loads(content[start:end + 1])
+    try:
+        return json.loads(content[start:end + 1])
+    except json.JSONDecodeError as exc:
+        raise SchemaValidationError(f"provider content is not valid JSON: {exc}") from exc
 
 
 def parse_plan(content: str) -> AgentPlan:
     obj = _extract_json(content)
-    jsonschema.validate(instance=obj, schema=_load_plan_schema())
-    return AgentPlan.model_validate(obj)
+    try:
+        jsonschema.validate(instance=obj, schema=_load_plan_schema())
+    except jsonschema.exceptions.ValidationError as exc:
+        raise SchemaValidationError(f"plan does not match AgentPlan v1 schema: {exc.message}") from exc
+    try:
+        return AgentPlan.model_validate(obj)
+    except Exception as exc:
+        raise SchemaValidationError(f"plan failed model validation: {exc}") from exc
 
 
 def plan_hash(plan: AgentPlan) -> str:
@@ -60,7 +70,10 @@ class Planner:
         self.router = router
         self.settings = settings or get_settings()
 
-    async def plan(self, req: PlanRequest) -> tuple[AgentPlan, dict[str, Any]]:
+    async def plan(
+        self, req: PlanRequest, *, on_delta: Callable[[str], None] | None = None,
+        on_attempt_start: Callable[[], None] | None = None,
+    ) -> tuple[AgentPlan, dict[str, Any]]:
         ctx_cells = count_context_cells(req.context)
         from ..core.errors import HardLimitError
 
@@ -77,8 +90,11 @@ class Planner:
             timeout_ms=self.settings.provider_timeout_seconds * 1000,
             metadata={"run_id": req.parent_run_id or "", "data_class": req.options.data_class.value},
             tool_policy={"mode": "none", "allowed_tools": []},
+            model_override=req.options.model,
         )
-        resp = await self.router.route(model_req, req.options.profile)
+        resp = await self.router.route(
+            model_req, req.options.profile, on_delta=on_delta, on_attempt_start=on_attempt_start,
+        )
         try:
             plan = parse_plan(resp.content)
         except SchemaValidationError:
@@ -113,6 +129,7 @@ class Planner:
         mr = MR(request_id=new_id("req"), messages=repair_msgs,
                  response_schema=model_req.response_schema, temperature=0.0,
                  max_output_tokens=model_req.max_output_tokens, timeout_ms=model_req.timeout_ms,
-                 metadata=model_req.metadata, tool_policy=model_req.tool_policy)
+                 metadata=model_req.metadata, tool_policy=model_req.tool_policy,
+                 model_override=model_req.model_override)
         resp = await self.router.route(mr, None)
         return resp.content

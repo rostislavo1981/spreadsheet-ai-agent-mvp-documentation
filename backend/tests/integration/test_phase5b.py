@@ -7,11 +7,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.errors import PolicyViolationError
 from app.core.settings import Settings, reset_settings
-from app.main import create_app
-from app.policy.service import validate_plan, validate_protected_merged
 from app.domain.models import PlanRequest
 from app.domain.provider_models import AgentPlan
+from app.main import create_app
+from app.policy.service import validate_plan, validate_protected_merged
 
 
 def make_settings(fx):
@@ -22,8 +23,8 @@ def make_settings(fx):
 
 @pytest.fixture
 def tmpdb():
-    fd = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
-    p = fd.name; fd.close()
+    with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as fd:
+        p = fd.name
     yield p
     Path(p).unlink(missing_ok=True)
 
@@ -66,13 +67,13 @@ def _plan(target="I5:I7"):
 
 def test_protected_rejected():
     req = _req_with(protected=["I5:I7"])
-    with pytest.raises(Exception):
+    with pytest.raises(PolicyViolationError):
         validate_plan(_plan(), req)
 
 
 def test_merged_rejected():
     req = _req_with(merged=["I5:I7"])
-    with pytest.raises(Exception):
+    with pytest.raises(PolicyViolationError):
         validate_plan(_plan(), req)
 
 

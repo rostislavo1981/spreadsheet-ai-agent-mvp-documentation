@@ -4,7 +4,6 @@ Uses a temp sqlite file to prove runs/audit survive a "restart" (new store).
 """
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -32,9 +31,8 @@ def make_settings(fixture: str, db_path: str) -> Settings:
 
 @pytest.fixture
 def tmpdb():
-    fd = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
-    path = fd.name
-    fd.close()
+    with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as fd:
+        path = fd.name
     yield path
     Path(path).unlink(missing_ok=True)
 
@@ -70,6 +68,8 @@ def test_persistence_survives_restart(client, tmpdb):
     fx = str(Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "provider" / "write_plan.json")
     app2 = create_app(make_settings(fx, tmpdb))
     c2 = TestClient(app2)
+    # a fresh app on the same sqlite file can still read the run (persistence)
+    assert c2.get(f"/v1/runs/{run_id}").status_code == 200
     # audit recorded
     with get_connection(tmpdb) as conn:
         rows = conn.execute("SELECT COUNT(*) FROM audit WHERE run_id=?", (run_id,)).fetchone()
@@ -114,6 +114,6 @@ def test_undo_without_apply_fails(client):
     run_id = r.json()["run_id"]
     phash = r.json()["preview"]["plan_hash"]
     a = client.post(f"/v1/runs/{run_id}:approve", json={"plan_hash": phash, "current_fingerprints": [], "confirmation": {}})
-    token = a.json()["approval_token"]
+    assert a.status_code == 200  # approving makes undo still unavailable (never applied)
     pu = client.post(f"/v1/runs/{run_id}:prepare-undo", json={"before_snapshot": {"ranges": []}})
     assert pu.status_code == 409  # undo not available (never applied)

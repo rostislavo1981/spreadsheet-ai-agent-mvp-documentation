@@ -8,11 +8,19 @@ server-side; the client never sees them. Tool policy is enforced server-side
 """
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
+
+import httpx
 
 from ...core.settings import Settings
 from ...domain.provider_models import ModelDescriptor, ProviderCapabilities
 from .openai_compatible import OpenAICompatibleAdapter
+
+logger = logging.getLogger(__name__)
+
+_MODEL_LIST_CACHE_TTL_SECONDS = 60
 
 
 class HermesAdapter(OpenAICompatibleAdapter):
@@ -27,6 +35,8 @@ class HermesAdapter(OpenAICompatibleAdapter):
         self.model = overrides.get("model", self.settings.hermes_model or "spreadsheet-planner")
         self._profile = overrides.get("profile", self.settings.hermes_profile or "spreadsheet-planner")
         self._client = client
+        self._models_cache: list[ModelDescriptor] | None = None
+        self._models_cache_at: float = 0.0
 
     @property
     def provider_id(self) -> str:
@@ -43,4 +53,34 @@ class HermesAdapter(OpenAICompatibleAdapter):
         return await self.capabilities()
 
     async def list_models(self) -> list[ModelDescriptor]:
-        return [ModelDescriptor(id=self.model, profiles=[self._profile])]
+        """Fetch the live model list from the Hermes gateway's /v1/models endpoint.
+
+        Falls back to the single configured HERMES_MODEL on any failure, so the
+        rest of the app (capabilities, routing) always has at least one usable
+        model even if Hermes is unreachable or the endpoint is unsupported.
+        """
+        now = time.monotonic()
+        if self._models_cache is not None and (now - self._models_cache_at) < _MODEL_LIST_CACHE_TTL_SECONDS:
+            return self._models_cache
+
+        fallback = [ModelDescriptor(id=self.model, profiles=[self._profile])]
+        try:
+            client = await self._get_client()
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            resp = await client.get(f"{self.base_url}/models", headers=headers)
+            if resp.status_code != 200:
+                logger.warning("hermes list_models non-200 status=%s", resp.status_code)
+                return fallback
+            data = resp.json().get("data", [])
+            models = [ModelDescriptor(id=m["id"], profiles=[self._profile]) for m in data if m.get("id")]
+            if not models:
+                return fallback
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            logger.warning("hermes list_models failed: %s", exc)
+            return fallback
+
+        self._models_cache = models
+        self._models_cache_at = now
+        return models

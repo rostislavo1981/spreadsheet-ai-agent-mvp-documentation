@@ -25,7 +25,7 @@
   - Карточка превью плана: действия, затронутые ячейки, риск, провайдер
   - Кнопки **Approve → Apply → Undo** (реально пишут/откатывают в таблице)
   - Статус-строка: провайдер, токены, ошибки
-- **Code.gs** — дефолтный `BACKEND_URL = https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` (Tailscale, доступен из таблицы), функции `setBackendUrl`/`setClientToken`
+- **Code.gs** — дефолтный `BACKEND_URL = https://sheets.projectrost.ru` (публичный HTTPS, доступен из таблицы), функции `setBackendUrl`/`setClientToken`
 - **ActionExecutor.gs** — реальное применение (SET_VALUES/SET_FORMULAS/CLEAR_RANGE/FORMAT_RANGE/ADD_SHEET) + undo через RESTORE_RANGE
 - **ContextCapture.gs** — захват выделения, формул, отображаемых значений, fingerprint
 - **ApiClient.gs** — вызовы `/v1/runs:plan`, `:approve`, `:result`, `:prepare-undo`, `:undo-result`, `/v1/capabilities`
@@ -34,13 +34,13 @@
 ## Проверка (офлайн, без сети и ключей)
 ```bash
 cd backend && . .venv/bin/activate && pytest tests -q
-# 37 passed, ruff clean
+# 61 passed, ruff clean
 ```
 
 ## Контрольная проверка живой интеграции
 - Бэкенд запущен на `:8022` через launchd (автостарт + KeepAlive, 24/7 при включённом Mac)
-- Публичный доступ через **Tailscale Serve**: `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` ✅
-- Cloudflare Tunnel на `spreadsheet.projectrost.ru` создан, но **заблокирован провайдером** (часть edge IP) — фолбэк на Tailscale
+- Публичный доступ: `https://sheets.projectrost.ru` ✅ (проверено: capabilities/plan/stream-status отвечают с bearer-токеном)
+- Fallback-домены: Tailscale `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` ✅; Cloudflare `spreadsheet.projectrost.ru` заблокирован провайдером
 - Hermes fallback работает: при отсутствии ключа роутер переключается на `fake` и возвращает валидный план `PREVIEW_READY`
 - Полный живой цикл пройден: Plan → Approve → Apply → Prepare-Undo → Undo-Result → Metrics (все шаги успешны)
 
@@ -54,7 +54,7 @@ cd backend && . .venv/bin/activate && pytest tests -q
 - Защита защищённых и объединённых (merged) диапазонов: любая запись в них отклоняется.
 
 ## Известные пробелы (намеренно вне scope MVP)
-- Публичный HTTPS домен на `spreadsheet.projectrost.ru` требует Cloudflare WARP или другого провайдера (текущий провайдер блокирует часть Cloudflare edge).
+- Запасной публичный домен `spreadsheet.projectrost.ru` (Cloudflare) требует Cloudflare WARP или другого провайдера; основной рабочий домен — `sheets.projectrost.ru`.
 - Реальные вызовы OpenAI/OpenRouter/Hermes через CI (автоматически проверяются только offline-fake + Hermes с respx-моком).
 - Браузерный e2e на живой таблице; очередь асинхронных задач; мультитенантная авторизация; экспорт телеметрии.
 

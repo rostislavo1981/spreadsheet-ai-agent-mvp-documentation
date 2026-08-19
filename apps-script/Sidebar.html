@@ -56,6 +56,7 @@
     <b>Spreadsheet AI</b>
     <span id="ctx">loading…</span>
     <select id="profile" title="Model profile"></select>
+    <select id="model" title="Model" style="display:none"></select>
   </header>
 
   <div id="chat"></div>
@@ -73,7 +74,8 @@
   </div>
 
   <script>
-    var STATE = { runId: null, planHash: null, token: null, bundle: null, cap: null, busy: false };
+    var STATE = { runId: null, planHash: null, token: null, bundle: null, cap: null, busy: false,
+                  streamTimer: null, streamBubble: null };
 
     // ---- tiny markdown (bold, code, headers, lists, paragraphs) ----
     function md(s) {
@@ -110,28 +112,72 @@
 
     function loadCapabilities() {
       google.script.run.withSuccessHandler(function(cfg) {
-        google.script.run.withSuccessHandler(function(caps) {
+        google.script.run.withSuccessHandler(function(res) {
+          var caps = (res && res.body) || {};
           var sel = document.getElementById('profile');
           sel.innerHTML = '';
           (caps.profiles || []).forEach(function(p) {
             var o = document.createElement('option'); o.value = p.id; o.textContent = p.label; sel.appendChild(o);
           });
           if (!sel.options.length) { var o = document.createElement('option'); o.value = 'auto'; o.textContent = 'Auto'; sel.appendChild(o); }
+
+          var modelSel = document.getElementById('model');
+          var models = caps.hermes_models || [];
+          modelSel.innerHTML = '';
+          models.forEach(function(m) {
+            var o = document.createElement('option'); o.value = m.id; o.textContent = m.id; modelSel.appendChild(o);
+          });
+          modelSel.style.display = models.length ? '' : 'none';
           STATE.capInfo = caps;
         }).apiGet('/v1/capabilities');
       }).getClientConfig();
     }
 
-    function buildRequest() {
+    function newClientRunToken() {
+      return 'tok_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+    }
+
+    function buildRequest(clientRunToken) {
       var cap = STATE.cap;
+      var modelSel = document.getElementById('model');
+      var options = { profile: document.getElementById('profile').value, data_class: 'internal', context_scope: 'selection_with_neighbors' };
+      if (modelSel.style.display !== 'none' && modelSel.value) { options.model = modelSel.value; }
+      if (clientRunToken) { options.client_run_token = clientRunToken; }
       return {
         schema_version: '1.0',
         client: { type: 'google_sheets', version: '0.1.0', tool_versions: { SET_VALUES: '1.0' } },
         workbook: cap.workbook, selection: cap.selection, context: cap.context,
         prompt: document.getElementById('prompt').value.trim(),
         conversation: [],
-        options: { profile: document.getElementById('profile').value, data_class: 'internal', context_scope: 'selection_with_neighbors' }
+        options: options
       };
+    }
+
+    // ---- pseudo-streaming: poll stream-status in parallel with the blocking
+    // :plan call, since Apps Script's UrlFetchApp blocks the caller of :plan
+    // itself and cannot read a real SSE/chunked response. ----
+    function startStreamPolling(token, bubble) {
+      stopStreamPolling();
+      STATE.streamTimer = setInterval(function() {
+        var timer = STATE.streamTimer;
+        google.script.run.withSuccessHandler(function(res) {
+          // Ignore replies that arrive after this poll was stopped (bubble
+          // already removed by onPlan/onFail) or superseded by a newer send.
+          if (STATE.streamTimer !== timer || !bubble.isConnected) return;
+          if (!res.ok || !res.body) return;
+          var text = res.body.partial_text || '';
+          if (text) { bubble.textContent = text; scrollChat(); }
+        }).apiGet('/v1/runs/by-token/' + encodeURIComponent(token) + ':stream-status');
+      }, 700);
+    }
+
+    function stopStreamPolling() {
+      if (STATE.streamTimer) { clearInterval(STATE.streamTimer); STATE.streamTimer = null; }
+    }
+
+    function endStreamPolling() {
+      stopStreamPolling();
+      if (STATE.streamBubble) { STATE.streamBubble.remove(); STATE.streamBubble = null; }
     }
 
     function doSend() {
@@ -141,10 +187,14 @@
       document.getElementById('prompt').value = '';
       STATE.busy = true; document.getElementById('sendBtn').disabled = true;
       setStatus('<span class="spin"></span> Planning…');
-      google.script.run.withSuccessHandler(onPlan).withFailureHandler(onFail).apiPost('/v1/runs:plan', buildRequest());
+      var token = newClientRunToken();
+      STATE.streamBubble = addMsg('bot', '…');
+      startStreamPolling(token, STATE.streamBubble);
+      google.script.run.withSuccessHandler(onPlan).withFailureHandler(onFail).apiPost('/v1/runs:plan', buildRequest(token));
     }
 
     function onPlan(res) {
+      endStreamPolling();
       STATE.busy = false; document.getElementById('sendBtn').disabled = false;
       if (!res.ok) { setStatus('Error ' + res.status); return; }
       var b = res.body;
@@ -237,7 +287,11 @@
         { before_snapshot: { encoding: 'cell-matrix-v1', ranges: [] } });
     }
 
-    function onFail(e) { STATE.busy = false; document.getElementById('sendBtn').disabled = false; setStatus('Error: ' + (e && e.message ? e.message : e)); }
+    function onFail(e) {
+      endStreamPolling();
+      STATE.busy = false; document.getElementById('sendBtn').disabled = false;
+      setStatus('Error: ' + (e && e.message ? e.message : e));
+    }
 
     document.getElementById('prompt').addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }

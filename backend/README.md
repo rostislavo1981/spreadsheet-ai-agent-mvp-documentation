@@ -18,7 +18,7 @@ backend/
 │   ├── persistence/  # SQLite: runs + audit (survives restart)
 │   ├── audit/        # Sanitized audit trail (no prompts/contexts/snapshots)
 │   └── core/settings.py      # Pydantic Settings (env-driven)
-├── tests/            # 37 passed: unit + contract + integration
+├── tests/            # 61 passed: unit + contract + integration
 ├── data/agent.sqlite3 (gitignored)
 ├── .venv/ (gitignored)
 ├── .env.example
@@ -42,10 +42,11 @@ HERMES_ENABLED=true HERMES_BASE_URL=http://127.0.0.1:4012/v1 ENABLED_PROVIDER_TA
 
 Бэкенд должен быть доступен по HTTPS из интернета (Apps Script на серверах Google не достанет localhost).
 
-- **Tailscale Serve** (уже работает): `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` — требует tailnet.
-- **Cloudflare Tunnel** (создан, DNS есть): `https://spreadsheet.projectrost.ru` — сейчас заблокирован провайдером (edge IP). Требует Cloudflare WARP или другой провайдер.
+- **Основной публичный домен** (работает): `https://sheets.projectrost.ru` — требует bearer-токен клиента (`APP_CLIENT_TOKEN_HASHES`).
+- **Tailscale Serve** (запасной): `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` — требует tailnet.
+- **Cloudflare Tunnel** (`spreadsheet.projectrost.ru`) — заблокирован провайдером (edge IP); требует Cloudflare WARP.
 
-Дефолт в `Code.gs` — Tailscale URL.
+Дефолт в `Code.gs` — `https://sheets.projectrost.ru`.
 
 ## Запуск как сервисы (24/7 на Mac)
 
@@ -63,7 +64,7 @@ launchctl start com.spreadsheet-agent.cloudflared
 
 ```bash
 cd backend && . .venv/bin/activate
-pytest tests -q        # 37 passed
+pytest tests -q        # 61 passed
 ruff check app         # clean
 ```
 

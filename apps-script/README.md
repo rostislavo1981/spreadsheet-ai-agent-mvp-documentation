@@ -35,7 +35,7 @@
 
 Бэкенд должен быть доступен по **публичному HTTPS** (Apps Script на серверах Google не достанет localhost).
 
-- В `Code.gs` задан `DEFAULT_BACKEND_URL = 'https://rostislavs-macbook-pro.tailc9f767.ts.net:8022'` (Tailscale, работает в tailnet).
+- В `Code.gs` задан `DEFAULT_BACKEND_URL = 'https://sheets.projectrost.ru'` (публичный HTTPS, работает из таблицы).
 - При необходимости сменить URL: в редакторе Apps Script выполнить `setBackendUrl("https://your-public-backend/v1")`.
 - Токен пилота (если нужен): `setClientToken("<token>")` — хранится в User Properties.
 
@@ -43,7 +43,8 @@
 
 ## Текущий рабочий публичный URL
 
-- **Tailscale**: `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` ✅ (нужен доступ к tailnet)
+- **Основной**: `https://sheets.projectrost.ru` ✅ (проверен: capabilities/plan/stream-status отвечают с bearer-токеном)
+- **Tailscale** (запасной): `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022` ✅ (нужен доступ к tailnet)
 - **Cloudflare**: `https://spreadsheet.projectrost.ru` ❌ (заблокирован провайдером — часть edge IP недоступна). Требует Cloudflare WARP или другой провайдер.
 
 ## Безопасность

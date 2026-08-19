@@ -47,6 +47,12 @@ class RunStore:
 
     def __init__(self) -> None:
         self._runs: dict[str, Run] = {}
+        # Ephemeral, in-process only: lets a client poll streaming status by a
+        # token it generated before the :plan call that creates the run
+        # returns. Never persisted; meaningless once the run reaches a
+        # terminal status (the final assistant_message supersedes it).
+        self._tokens: dict[str, str] = {}
+        self._stream_text: dict[str, str] = {}
 
     def create(self, parent_run_id: str | None = None) -> Run:
         run = Run(run_id=new_id("run"), parent_run_id=parent_run_id)
@@ -64,3 +70,20 @@ class RunStore:
         if cursor:
             runs = [r for r in runs if r.run_id != cursor]
         return runs[:limit]
+
+    def register_token(self, client_run_token: str, run_id: str) -> None:
+        self._tokens[client_run_token] = run_id
+
+    def resolve_token(self, client_run_token: str) -> str:
+        if client_run_token not in self._tokens:
+            raise KeyError(client_run_token)
+        return self._tokens[client_run_token]
+
+    def get_stream_text(self, run_id: str) -> str:
+        return self._stream_text.get(run_id, "")
+
+    def append_stream_text(self, run_id: str, delta: str) -> None:
+        self._stream_text[run_id] = self._stream_text.get(run_id, "") + delta
+
+    def clear_stream_text(self, run_id: str) -> None:
+        self._stream_text[run_id] = ""

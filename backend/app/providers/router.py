@@ -6,6 +6,8 @@ target up to `max_provider_attempts` (fail-closed: non-provider errors propagate
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from ..core.errors import ProviderError, ProvidersExhaustedError
 from ..core.settings import Settings, get_settings
 from ..domain.provider_models import ModelRequest, ModelResponse
@@ -50,7 +52,16 @@ class ModelRouter:
             ordered = [t for t in ordered if t in ("hermes", self.settings.hermes_profile)]
         return ordered
 
-    async def route(self, request: ModelRequest, profile: str | None = None) -> ModelResponse:
+    async def route(
+        self, request: ModelRequest, profile: str | None = None,
+        *, on_delta: Callable[[str], None] | None = None,
+        on_attempt_start: Callable[[], None] | None = None,
+    ) -> ModelResponse:
+        """on_attempt_start, if given, is called before each fallback attempt
+        (including the first) so the caller can discard any partial text a
+        prior failed attempt streamed via on_delta before this one starts
+        streaming its own — otherwise a caller that appends deltas would
+        concatenate the failed attempt's text with the retry's text."""
         profile = profile or self.settings.default_routing_profile
         ranked = self.rank_keep_order(profile)
         attempts: list[str] = []
@@ -58,9 +69,11 @@ class ModelRouter:
         max_attempts = min(self.settings.max_provider_attempts, len(ranked)) or 1
         for target in ranked[:max_attempts]:
             attempts.append(target)
+            if on_attempt_start:
+                on_attempt_start()
             try:
                 adapter = self.registry.get(target)
-                resp = await adapter.complete(request)
+                resp = await adapter.complete(request, on_delta=on_delta)
                 resp.route_metadata = {
                     **resp.route_metadata,
                     "profile": profile,

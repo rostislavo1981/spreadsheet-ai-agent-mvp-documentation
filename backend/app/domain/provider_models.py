@@ -31,13 +31,13 @@ class Target(BaseModel):
 
 class SetValuesArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    values: list[list[Any]] = Field(min_items=1)
+    values: list[list[Any]] = Field(min_length=1)
     overwrite_formulas: bool = False
 
 
 class SetFormulasArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    formulas: list[list[str]] = Field(min_items=1)
+    formulas: list[list[str]] = Field(min_length=1)
     notation: Literal["A1"] = "A1"
     fill_mode: Literal["exact"] | None = None
 
@@ -87,10 +87,10 @@ class AgentPlan(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     summary: str = Field(max_length=2000)
     answer: str = Field(max_length=20000)
-    actions: list[Action] = Field(default_factory=list, max_items=100)
-    warnings: list[str] = Field(default_factory=list, max_items=50)
-    assumptions: list[str] = Field(default_factory=list, max_items=50)
-    context_used: list[str] = Field(default_factory=list, max_items=100)
+    actions: list[Action] = Field(default_factory=list, max_length=100)
+    warnings: list[str] = Field(default_factory=list, max_length=50)
+    assumptions: list[str] = Field(default_factory=list, max_length=50)
+    context_used: list[str] = Field(default_factory=list, max_length=100)
     requires_confirmation: bool
 
 
@@ -108,6 +108,7 @@ class ModelRequest(BaseModel):
     timeout_ms: int = 45_000
     metadata: dict[str, Any] = Field(default_factory=dict)
     tool_policy: dict[str, Any] = Field(default_factory=lambda: {"mode": "none", "allowed_tools": []})
+    model_override: str | None = Field(default=None, max_length=200)
 
 
 class Usage(BaseModel):

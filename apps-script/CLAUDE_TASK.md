@@ -13,8 +13,8 @@
 - `Sidebar.html` — ЕСТЬ, но примитивный: нет истории чата, нет выбора модели, Apply/Undo не работают.
 
 ## Бэкенд (уже работает, живой):
-- Base URL (публичный, доступен из таблицы): `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022`
-  (дефолт в `getClientConfig` сейчас `http://127.0.0.1:8000` — ИСПРАВИТЬ на этот Tailscale-URL).
+- Base URL (публичный, доступен из таблицы): `https://sheets.projectrost.ru`
+  (дефолт в `getClientConfig` уже стоит на этот URL).
 - Эндпоинты (все POST, JSON, Bearer-токен клиента опционален):
   - `GET /v1/capabilities` → `{profiles:[{id,label}], tools:[{type}], limits:{...}}`
   - `POST /v1/runs:plan` (тело PlanRequest) → `{run_id, status:"PREVIEW_READY", assistant_message, plan:{actions:[{type,target:{a1_range},rationale}]}, preview:{plan_hash, changed_cells, risk}, route:{provider,model}, usage:{input_tokens,output_tokens}}`
@@ -36,7 +36,7 @@
 - Используй ТОЛЬКО vanilla JS + google.script.run (никаких внешних CDN — Apps Script их блокирует). Для Markdown можно маленький self-contained парсер (bold, code, lists, headers) прямо в файле.
 
 ### 2. Code.gs — обработчики
-- Исправить `getClientConfig()`: дефолт `backendUrl` = `https://rostislavs-macbook-pro.tailc9f767.ts.net:8022`.
+- Исправить `getClientConfig()`: дефолт `backendUrl` = `https://sheets.projectrost.ru`.
 - Добавить `setBackendUrl(url)` и `setClientToken(tok)` (запись в User Properties) — для настройки.
 - Убедиться, что `captureSelection` возвращает корректный PlanRequest-совместимый объект.
 

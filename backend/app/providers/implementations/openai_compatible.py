@@ -5,6 +5,9 @@ with `response_format: json_schema`. Maps vendor errors into the common taxonomy
 """
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
+
 import httpx
 
 from ...core.errors import ProviderError
@@ -62,10 +65,9 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         est = (request.max_output_tokens / 1_000_000) * 0.01
         return CostEstimate(estimated_cost_usd=est)
 
-    async def complete(self, request: ModelRequest) -> ModelResponse:
-        client = await self._get_client()
+    def _payload(self, request: ModelRequest, *, stream: bool) -> dict:
         payload = {
-            "model": self.model,
+            "model": request.model_override or self.model,
             "messages": request.messages,
             "temperature": request.temperature,
             "max_tokens": request.max_output_tokens,
@@ -78,9 +80,25 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                 },
             },
         }
+        if stream:
+            payload["stream"] = True
+        return payload
+
+    def _headers(self) -> dict:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
+    async def complete(
+        self, request: ModelRequest, *, on_delta: Callable[[str], None] | None = None,
+    ) -> ModelResponse:
+        if on_delta is not None:
+            return await self._complete_streaming(request, on_delta)
+
+        client = await self._get_client()
+        payload = self._payload(request, stream=False)
+        headers = self._headers()
         try:
             resp = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
         except httpx.TimeoutException:
@@ -102,7 +120,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         usage = data.get("usage", {})
         return ModelResponse(
             provider_id=self.provider_id,
-            model=self.model,
+            model=request.model_override or self.model,
             content=content,
             structured={},
             finish_reason=data["choices"][0].get("finish_reason"),
@@ -113,4 +131,59 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             cost=Cost(amount_usd=None, estimated=False),
             latency_ms=None,
             provider_request_id=data.get("id"),
+        )
+
+    async def _complete_streaming(
+        self, request: ModelRequest, on_delta: Callable[[str], None],
+    ) -> ModelResponse:
+        """SSE chat-completions stream: invoke on_delta per text chunk and return
+        the fully aggregated response (Sidebar pseudo-streaming via polling)."""
+        client = await self._get_client()
+        payload = self._payload(request, stream=True)
+        headers = self._headers()
+        chunks: list[str] = []
+        finish_reason: str | None = None
+        response_id: str | None = None
+        try:
+            async with client.stream(
+                "POST", f"{self.base_url}/chat/completions", json=payload, headers=headers,
+            ) as resp:
+                if resp.status_code == 401:
+                    raise ProviderError("authentication", provider_id=self.provider_id, retryable=False, status_code=401)
+                if resp.status_code == 429:
+                    raise ProviderError("rate limited", provider_id=self.provider_id, retryable=True, status_code=429)
+                if resp.status_code >= 500:
+                    raise ProviderError("upstream 5xx", provider_id=self.provider_id, retryable=True, status_code=resp.status_code)
+                if resp.status_code != 200:
+                    raise ProviderError(f"status {resp.status_code}", provider_id=self.provider_id, retryable=False, status_code=resp.status_code)
+
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    raw = line[len("data:"):].strip()
+                    if raw == "[DONE]":
+                        break
+                    event = json.loads(raw)
+                    response_id = event.get("id", response_id)
+                    choice = (event.get("choices") or [{}])[0]
+                    delta_text = choice.get("delta", {}).get("content")
+                    if delta_text:
+                        chunks.append(delta_text)
+                        on_delta(delta_text)
+                    finish_reason = choice.get("finish_reason", finish_reason)
+        except httpx.TimeoutException:
+            raise ProviderError("upstream timeout", provider_id=self.provider_id, retryable=True)
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"http error: {exc}", provider_id=self.provider_id, retryable=True)
+
+        return ModelResponse(
+            provider_id=self.provider_id,
+            model=request.model_override or self.model,
+            content="".join(chunks),
+            structured={},
+            finish_reason=finish_reason,
+            usage=Usage(),
+            cost=Cost(amount_usd=None, estimated=False),
+            latency_ms=None,
+            provider_request_id=response_id,
         )

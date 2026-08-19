@@ -47,7 +47,9 @@
         "profile": {"type": "string", "minLength": 1, "maxLength": 100},
         "data_class": {"enum": ["public", "internal", "confidential", "restricted"]},
         "max_cost_usd": {"type": ["number", "null"], "minimum": 0},
-        "context_scope": {"enum": ["selection", "selection_with_neighbors", "approved_custom_ranges"]}
+        "context_scope": {"enum": ["selection", "selection_with_neighbors", "approved_custom_ranges"]},
+        "model": {"type": ["string", "null"], "maxLength": 200},
+        "client_run_token": {"type": ["string", "null"], "maxLength": 100}
       }
     }
   },
